@@ -3,7 +3,11 @@ import fsp from "node:fs/promises"
 import path from "node:path"
 import { pipeline } from "node:stream/promises"
 
-import express, { type NextFunction, type Request, type Response } from "express"
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express"
 
 import { INSPO_DIR, IS_PROD, PORT, TMP_DIR } from "./config.ts"
 import {
@@ -22,15 +26,24 @@ import {
   watch,
 } from "./library.ts"
 import { mediaFile, type Size } from "./media.ts"
-import { loadPublishState, publishEvents, publishNow, publishState, schedulePublish } from "./publish.ts"
+import {
+  loadPublishState,
+  publishEvents,
+  publishNow,
+  publishState,
+  schedulePublish,
+  setEditingPassword,
+  startGallerySync,
+} from "./publish.ts"
 import { errorMessage, hash } from "./util.ts"
 
 const app = express()
 app.use(express.json({ limit: "1mb" }))
 
 type Handler = (req: Request, res: Response) => Promise<unknown>
-const route = (handler: Handler) => (req: Request, res: Response, next: NextFunction) =>
-  handler(req, res).catch(next)
+const route =
+  (handler: Handler) => (req: Request, res: Response, next: NextFunction) =>
+    handler(req, res).catch(next)
 
 const param = (value: unknown) => (typeof value === "string" ? value : "")
 
@@ -89,7 +102,10 @@ app.post(
     const name = path.basename(param(req.query.name)) || "upload"
     const tags = param(req.query.tag) ? [param(req.query.tag)] : []
     await fsp.mkdir(TMP_DIR, { recursive: true })
-    const temp = path.join(TMP_DIR, `${hash(name + Date.now() + Math.random())}.part`)
+    const temp = path.join(
+      TMP_DIR,
+      `${hash(name + Date.now() + Math.random())}.part`
+    )
     await pipeline(req, fs.createWriteStream(temp))
     res.json({ id: await addUpload(temp, name, { tags }) })
   })
@@ -108,7 +124,11 @@ app.get(
   route(async (req, res) => {
     const file = getFile(param(req.query.id))
     if (!file) return res.status(404).end()
-    const size = (["thumb", "large", "orig"].includes(param(req.query.size)) ? req.query.size : "orig") as Size
+    const size = (
+      ["thumb", "large", "orig"].includes(param(req.query.size))
+        ? req.query.size
+        : "orig"
+    ) as Size
     const out = await mediaFile(file, size)
     if (!out) return res.status(404).end()
     // Each URL carries the file's version, so it's safe to cache for a long time.
@@ -129,13 +149,29 @@ app.post(
   })
 )
 
+app.post(
+  "/api/publish/password",
+  route(async (req, res) => {
+    const { password } = req.body ?? {}
+    res.json(
+      await setEditingPassword(typeof password === "string" ? password : null)
+    )
+  })
+)
+
 // Live updates: the page refreshes when the folder changes.
 app.get("/api/events", (req, res) => {
-  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" })
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  })
   res.flushHeaders()
-  const send = (payload: object) => res.write(`data: ${JSON.stringify(payload)}\n\n`)
+  const send = (payload: object) =>
+    res.write(`data: ${JSON.stringify(payload)}\n\n`)
   const onChanged = () => send({ type: "changed" })
-  const onToast = (toast: { message: string }) => send({ type: "toast", ...toast })
+  const onToast = (toast: { message: string }) =>
+    send({ type: "toast", ...toast })
   const onPublish = (publish: object) => send({ type: "publish", publish })
   const heartbeat = setInterval(() => res.write(": ping\n\n"), 25_000)
   events.on("changed", onChanged)
@@ -168,6 +204,8 @@ await scan()
 watch()
 // Keep the published gallery in step with the library.
 events.on("changed", schedulePublish)
+// Bring in edits made in the gallery's editor mode.
+startGallerySync()
 
 // Only this Mac can open the app; nothing is exposed to the network.
 app.listen(PORT, "127.0.0.1", () => {

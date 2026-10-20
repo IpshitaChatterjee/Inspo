@@ -11,8 +11,19 @@ import {
   type Patch,
   type PublishState,
 } from "@/lib/api"
+import {
+  editsFor,
+  lock,
+  LockedError,
+  pendingEdits,
+  savedToken,
+  sendEdit,
+  unlock,
+  withEdits,
+} from "@/lib/gallery-edits"
 
 const FRESH_FOR_MS = 2600
+const GALLERY_UNDO_MS = 6000
 
 export function useLibrary() {
   const [library, setLibrary] = React.useState<Library | null>(null)
@@ -22,6 +33,14 @@ export function useLibrary() {
   const known = React.useRef<Set<string> | null>(null)
   const [publish, setPublish] = React.useState<PublishState | null>(null)
   const warnedFull = React.useRef(false)
+  // Gallery editor mode: unlocked when this device has a valid token.
+  const [token, setToken] = React.useState<string | null>(() =>
+    GALLERY ? savedToken() : null
+  )
+  const libraryRef = React.useRef<Library | null>(null)
+  React.useEffect(() => {
+    libraryRef.current = library
+  }, [library])
 
   // Say it once per visit when the shared gallery is getting full.
   React.useEffect(() => {
@@ -39,6 +58,9 @@ export function useLibrary() {
   const refresh = React.useCallback(async () => {
     try {
       const next = await api.library()
+      // In the gallery, show edits the Mac hasn't picked up yet.
+      if (GALLERY)
+        next.items = withEdits(next.items, await pendingEdits().catch(() => []))
       const previous = known.current
       const ids = new Set(next.items.map((i) => i.id))
       if (previous) {
@@ -93,8 +115,27 @@ export function useLibrary() {
     return () => events.close()
   }, [refresh])
 
+  // Gallery edits: send each one; a stale unlock locks the editor again.
+  const sendGalleryEdits = React.useCallback(
+    async (edits: Parameters<typeof sendEdit>[1][]) => {
+      if (!token) return
+      try {
+        for (const edit of edits) await sendEdit(token, edit)
+      } catch (e) {
+        if (e instanceof LockedError) {
+          lock()
+          setToken(null)
+        }
+        toast.error((e as Error).message)
+        void refresh()
+      }
+    },
+    [token, refresh]
+  )
+
   const update = React.useCallback(
     async (id: string, patch: Patch) => {
+      const before = libraryRef.current?.items.find((item) => item.id === id)
       setLibrary(
         (lib) =>
           lib && {
@@ -104,6 +145,10 @@ export function useLibrary() {
             ),
           }
       )
+      if (GALLERY) {
+        if (before) await sendGalleryEdits(editsFor(before, patch))
+        return
+      }
       try {
         await api.update(id, patch)
       } catch (e) {
@@ -111,7 +156,7 @@ export function useLibrary() {
         void refresh()
       }
     },
-    [refresh]
+    [refresh, sendGalleryEdits]
   )
 
   const remove = React.useCallback(
@@ -120,6 +165,25 @@ export function useLibrary() {
         (lib) =>
           lib && { ...lib, items: lib.items.filter((i) => i.id !== item.id) }
       )
+      if (GALLERY) {
+        // Held back for a few seconds so Undo is instant and nothing is sent.
+        let undone = false
+        toast("Deleted", {
+          duration: GALLERY_UNDO_MS,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              undone = true
+              void refresh()
+            },
+          },
+        })
+        setTimeout(() => {
+          if (!undone)
+            void sendGalleryEdits([{ itemId: item.id, op: "delete" }])
+        }, GALLERY_UNDO_MS)
+        return
+      }
       try {
         const { undoId } = await api.remove(item.id)
         toast(item.kind === "link" ? "Link deleted" : "Deleted", {
@@ -142,7 +206,7 @@ export function useLibrary() {
         void refresh()
       }
     },
-    [refresh]
+    [refresh, sendGalleryEdits]
   )
 
   const publishNow = React.useCallback(async () => {
@@ -153,5 +217,36 @@ export function useLibrary() {
     }
   }, [])
 
-  return { library, error, fresh, refresh, update, remove, publish, publishNow }
+  const unlockEditing = React.useCallback(async (password: string) => {
+    setToken(await unlock(password))
+    toast.success("Editing unlocked on this device")
+  }, [])
+
+  const lockEditing = React.useCallback(() => {
+    lock()
+    setToken(null)
+    toast("Editing locked")
+  }, [])
+
+  const setEditingPassword = React.useCallback(
+    async (password: string | null) => {
+      setPublish(await api.setEditingPassword(password))
+    },
+    []
+  )
+
+  return {
+    library,
+    error,
+    fresh,
+    refresh,
+    update,
+    remove,
+    publish,
+    publishNow,
+    canEdit: !GALLERY || !!token,
+    unlockEditing,
+    lockEditing,
+    setEditingPassword,
+  }
 }

@@ -41,6 +41,8 @@ export type PublishState = {
   fileLimit?: number
   error?: string
   pending?: boolean
+  /** Whether editor mode in the gallery has a password. */
+  editing?: boolean
 }
 
 /** How full the shared gallery is (0–1), once it has been published. */
@@ -114,4 +116,6 @@ export const api = {
   reveal: (id?: string) => request("/api/reveal", json("POST", { id })),
   publishState: () => request<PublishState>("/api/publish"),
   publish: () => request<PublishState>("/api/publish", { method: "POST" }),
+  setEditingPassword: (password: string | null) =>
+    request<PublishState>("/api/publish/password", json("POST", { password })),
 }

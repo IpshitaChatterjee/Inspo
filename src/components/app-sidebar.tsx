@@ -39,6 +39,7 @@ type AppSidebarProps = {
   publish: PublishState | null
   onView: (view: View) => void
   onPublish: () => void
+  onSetPassword: (password: string | null) => Promise<void>
 }
 
 export type TagCount = { name: string; count: number; mine: boolean }
@@ -70,6 +71,7 @@ export function AppSidebar({
   publish,
   onView,
   onPublish,
+  onSetPassword,
 }: AppSidebarProps) {
   const [renaming, setRenaming] = React.useState<string | null>(null)
   const [showAll, setShowAll] = React.useState(false)
@@ -211,7 +213,7 @@ export function AppSidebar({
 
       {!GALLERY && (
         <div className="border-t border-sidebar-border p-3">
-          <GalleryStatus state={publish} onPublish={onPublish} />
+          <GalleryStatus state={publish} onPublish={onPublish} onSetPassword={onSetPassword} />
         </div>
       )}
     </aside>

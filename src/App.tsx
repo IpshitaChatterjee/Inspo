@@ -13,6 +13,8 @@ import { cn } from "cn"
 import { AddDialog } from "@/components/add-dialog"
 import { AppSidebar, isUntagged, type View } from "@/components/app-sidebar"
 import { DropOverlay } from "@/components/drop-overlay"
+import { EditLock } from "@/components/edit-lock"
+import { CanEditContext } from "@/lib/gallery-edits"
 import { HowToSave } from "@/components/how-to-save"
 import { InspoDetail } from "@/components/inspo-detail"
 import { MasonryGrid } from "@/components/masonry-grid"
@@ -105,8 +107,19 @@ function matches(item: Item, query: string) {
 }
 
 export function App() {
-  const { library, error, fresh, update, remove, publish, publishNow } =
-    useLibrary()
+  const {
+    library,
+    error,
+    fresh,
+    update,
+    remove,
+    publish,
+    publishNow,
+    canEdit,
+    unlockEditing,
+    lockEditing,
+    setEditingPassword,
+  } = useLibrary()
   const [view, setView] = React.useState<View>({ kind: "all" })
   const [type, setType] = React.useState<TypeFilter>("all")
   const [query, setQuery] = React.useState("")
@@ -216,146 +229,156 @@ export function App() {
   const filtering = type !== "all" || query.trim() !== ""
 
   return (
-    <LayoutGroup>
-      <div className="flex min-h-svh bg-background">
-        <AppSidebar
-          items={items}
-          view={view}
-          publish={publish}
-          onPublish={() => void publishNow()}
-          onView={(next) => {
-            setView(next)
-            window.scrollTo({ top: 0 })
-          }}
-        />
-
-        <main className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-transparent bg-background/80 px-4 py-3 backdrop-blur-xl md:px-8">
-            <InputGroup className="h-9 max-w-md rounded-full bg-muted/60 shadow-none">
-              <InputGroupAddon>
-                <SearchIcon />
-              </InputGroupAddon>
-              <InputGroupInput
-                ref={searchRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Escape" && (setQuery(""), e.currentTarget.blur())
-                }
-                placeholder="Search titles, tags, colours, text…"
-              />
-              <InputGroupAddon align="inline-end">
-                <Kbd>/</Kbd>
-              </InputGroupAddon>
-            </InputGroup>
-
-            <TypeSwitch value={type} onChange={setType} />
-
-            <div className="ml-auto flex items-center gap-1">
-              <ThemeToggle />
-              {!GALLERY && (
-                <Button
-                  onClick={() => setAdding(true)}
-                  className="rounded-full pr-3.5"
-                >
-                  <PlusIcon />
-                  Save
-                </Button>
-              )}
-            </div>
-          </header>
-
-          {error && (
-            <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive md:mx-8">
-              <TriangleAlertIcon className="size-4" />
-              {error}
-            </div>
-          )}
-
-          <div className="flex flex-1 flex-col gap-5 px-4 pt-4 pb-16 md:px-8">
-            <MobileTags
-              items={items}
-              view={view}
-              onView={(next) => {
-                setView(next)
-                window.scrollTo({ top: 0 })
-              }}
-            />
-            <div className="flex items-baseline gap-3">
-              <motion.h1
-                key={heading}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="font-heading text-3xl font-semibold tracking-tight"
-              >
-                {heading}
-              </motion.h1>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {visible.length}
-                {filtering && ` of ${items.length}`}
-              </span>
-            </div>
-
-            {!library && !error ? (
-              <div className="flex flex-1 items-center justify-center">
-                <Spinner className="size-6 text-muted-foreground" />
-              </div>
-            ) : visible.length ? (
-              <MasonryGrid
-                items={visible}
-                resetKey={resetKey}
-                fresh={fresh}
-                openId={open?.morph ? open.id : null}
-                onOpen={(item) => setOpen({ id: item.id, morph: true })}
-              />
-            ) : (
-              <EmptyState
-                filtering={filtering || view.kind !== "all" || GALLERY}
-                onAdd={() => setAdding(true)}
-                onHelp={() => setHelp(true)}
-              />
-            )}
-          </div>
-        </main>
-      </div>
-
-      <AnimatePresence>
-        {openItem && (
-          <InspoDetail
-            key="detail"
-            item={openItem}
-            morph={open?.morph ?? false}
-            tags={allTags}
-            onClose={close}
-            onStep={step}
-            onUpdate={update}
-            onDelete={(item) => {
-              step(1)
-              if (visible.length <= 1) close()
-              void remove(item)
+    <CanEditContext.Provider value={canEdit}>
+      <LayoutGroup>
+        <div className="flex min-h-svh bg-background">
+          <AppSidebar
+            items={items}
+            view={view}
+            publish={publish}
+            onPublish={() => void publishNow()}
+            onSetPassword={setEditingPassword}
+            onView={(next) => {
+              setView(next)
+              window.scrollTo({ top: 0 })
             }}
           />
-        )}
-      </AnimatePresence>
 
-      {!GALLERY && (
-        <>
-          <AddDialog
-            open={adding}
-            tag={tag}
-            onOpenChange={setAdding}
-            onLink={saveLink}
-            onFiles={saveFiles}
-          />
-          <HowToSave
-            open={help}
-            folder={library?.folder ?? ""}
-            onOpenChange={setHelp}
-          />
-          <DropOverlay tag={tag} onFiles={saveFiles} onLink={saveLink} />
-        </>
-      )}
-    </LayoutGroup>
+          <main className="flex min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-transparent bg-background/80 px-4 py-3 backdrop-blur-xl md:px-8">
+              <InputGroup className="h-9 max-w-md rounded-full bg-muted/60 shadow-none">
+                <InputGroupAddon>
+                  <SearchIcon />
+                </InputGroupAddon>
+                <InputGroupInput
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Escape" && (setQuery(""), e.currentTarget.blur())
+                  }
+                  placeholder="Search titles, tags, colours, text…"
+                />
+                <InputGroupAddon align="inline-end">
+                  <Kbd>/</Kbd>
+                </InputGroupAddon>
+              </InputGroup>
+
+              <TypeSwitch value={type} onChange={setType} />
+
+              <div className="ml-auto flex items-center gap-1">
+                {GALLERY && (
+                  <EditLock
+                    unlocked={canEdit}
+                    onUnlock={unlockEditing}
+                    onLock={lockEditing}
+                  />
+                )}
+                <ThemeToggle />
+                {!GALLERY && (
+                  <Button
+                    onClick={() => setAdding(true)}
+                    className="rounded-full pr-3.5"
+                  >
+                    <PlusIcon />
+                    Save
+                  </Button>
+                )}
+              </div>
+            </header>
+
+            {error && (
+              <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive md:mx-8">
+                <TriangleAlertIcon className="size-4" />
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-1 flex-col gap-5 px-4 pt-4 pb-16 md:px-8">
+              <MobileTags
+                items={items}
+                view={view}
+                onView={(next) => {
+                  setView(next)
+                  window.scrollTo({ top: 0 })
+                }}
+              />
+              <div className="flex items-baseline gap-3">
+                <motion.h1
+                  key={heading}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="font-heading text-3xl font-semibold tracking-tight"
+                >
+                  {heading}
+                </motion.h1>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  {visible.length}
+                  {filtering && ` of ${items.length}`}
+                </span>
+              </div>
+
+              {!library && !error ? (
+                <div className="flex flex-1 items-center justify-center">
+                  <Spinner className="size-6 text-muted-foreground" />
+                </div>
+              ) : visible.length ? (
+                <MasonryGrid
+                  items={visible}
+                  resetKey={resetKey}
+                  fresh={fresh}
+                  openId={open?.morph ? open.id : null}
+                  onOpen={(item) => setOpen({ id: item.id, morph: true })}
+                />
+              ) : (
+                <EmptyState
+                  filtering={filtering || view.kind !== "all" || GALLERY}
+                  onAdd={() => setAdding(true)}
+                  onHelp={() => setHelp(true)}
+                />
+              )}
+            </div>
+          </main>
+        </div>
+
+        <AnimatePresence>
+          {openItem && (
+            <InspoDetail
+              key="detail"
+              item={openItem}
+              morph={open?.morph ?? false}
+              tags={allTags}
+              onClose={close}
+              onStep={step}
+              onUpdate={update}
+              onDelete={(item) => {
+                step(1)
+                if (visible.length <= 1) close()
+                void remove(item)
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        {!GALLERY && (
+          <>
+            <AddDialog
+              open={adding}
+              tag={tag}
+              onOpenChange={setAdding}
+              onLink={saveLink}
+              onFiles={saveFiles}
+            />
+            <HowToSave
+              open={help}
+              folder={library?.folder ?? ""}
+              onOpenChange={setHelp}
+            />
+            <DropOverlay tag={tag} onFiles={saveFiles} onLink={saveLink} />
+          </>
+        )}
+      </LayoutGroup>
+    </CanEditContext.Provider>
   )
 }
 

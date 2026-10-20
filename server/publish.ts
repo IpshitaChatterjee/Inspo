@@ -1,9 +1,17 @@
+import { spawn } from "node:child_process"
+import crypto from "node:crypto"
 import { EventEmitter } from "node:events"
 import fsp from "node:fs/promises"
 import path from "node:path"
 
 import { CACHE_DIR } from "./config.ts"
-import { getFile, listItems, type Item } from "./library.ts"
+import {
+  deleteItem,
+  getFile,
+  listItems,
+  updateItem,
+  type Item,
+} from "./library.ts"
 import { mediaFile, VIDEO_EXTS } from "./media.ts"
 import { ensureDownloaded, errorMessage, exists, hash, run } from "./util.ts"
 
@@ -20,6 +28,12 @@ const SITE_DIR = path.join(CACHE_DIR, "site")
 const MEDIA_DIR = path.join(SITE_DIR, "m")
 const BUILD_DIR = path.join(CACHE_DIR, "gallery-build")
 const STATE_FILE = path.join(CACHE_DIR, "publish.json")
+const WORKER_CONFIG = path.join(CACHE_DIR, "wrangler.json")
+// Handles editor mode in the gallery; everything else is static files.
+const WORKER_SCRIPT = path.join(ROOT, "gallery-worker/index.js")
+const KEYCHAIN_SERVICE = "inspo-gallery"
+// How often the Mac collects edits made in the gallery.
+const PULL_EVERY_MS = 3 * 60_000
 
 const PROJECT = process.env.INSPO_SITE_NAME ?? "inspo"
 // Cloudflare's free plan: 25 MiB per file, 20,000 files per site.
@@ -53,7 +67,13 @@ export type PublishState = {
   fileLimit?: number
   error?: string
   pending?: boolean
+  /** Whether the gallery has an editing password. */
+  editing?: boolean
   signature?: string
+  /** Cloudflare storage holding edits made in the gallery. */
+  kvId?: string
+  /** Gallery edits applied here, cleared once a publish includes them. */
+  appliedEditIds?: string[]
 }
 
 export const publishEvents = new EventEmitter()
@@ -73,9 +93,11 @@ export async function loadPublishState() {
   }
 }
 
-export function publishState(): Omit<PublishState, "signature"> {
+export function publishState() {
   const visible = { ...state }
   delete visible.signature
+  delete visible.kvId
+  delete visible.appliedEditIds
   return visible
 }
 
@@ -111,6 +133,7 @@ export async function publishNow() {
         files,
         fileLimit: FILE_LIMIT,
       })
+      await clearAppliedEdits()
     } else {
       const url = await deploy()
       await setState({
@@ -123,6 +146,7 @@ export async function publishNow() {
         signature,
         publishedAt: new Date().toISOString(),
       })
+      await clearAppliedEdits()
     }
   } catch (error) {
     console.warn(`[publish] ${errorMessage(error)}`)
@@ -167,14 +191,14 @@ async function buildSite() {
   const published: Item[] = []
 
   for (const item of items) {
+    const key = publicId(item)
+    if (!key) continue
     if (item.kind === "link") {
-      published.push(toPublic(item, `link-${hash(item.id)}`))
+      published.push(toPublic(item, key))
       continue
     }
-    const file = getFile(item.id)
-    if (!file) continue
+    const file = getFile(item.id)!
     try {
-      const key = hash(`${file.rel}|${file.size}|${file.mtimeMs}`)
       const media = await exportMedia(file, key)
       if (!media) continue
       Object.values(media).forEach((name) => name && keep.add(name))
@@ -219,8 +243,10 @@ async function buildSite() {
   const assets = (await fsp.readdir(path.join(BUILD_DIR, "assets")))
     .sort()
     .join(",")
+  // A change to the editor-mode script also needs a publish.
+  const script = await fsp.readFile(WORKER_SCRIPT, "utf8")
   return {
-    signature: hash(data + assets),
+    signature: hash(data + assets + script),
     count: published.length,
     files: fileCount,
   }
@@ -234,6 +260,13 @@ async function countFiles(dir: string): Promise<number> {
       : 1
   }
   return total
+}
+
+/** The item's id in the gallery: stable while the file is unchanged, and reveals no file names. */
+function publicId(item: Item) {
+  if (item.kind === "link") return `link-${hash(item.id)}`
+  const file = getFile(item.id)
+  return file ? hash(`${file.rel}|${file.size}|${file.mtimeMs}`) : null
 }
 
 /** What visitors may see. Notes stay private, and file names aren't needed. */
@@ -332,25 +365,242 @@ async function exportVideo(file: Source, key: string) {
 
 // ---------- Sending it to Cloudflare ----------
 
-// Cloudflare's static hosting (Workers static assets, which replaced Pages).
-// Run from the cache folder so the tool doesn't try to configure this project.
+// Static files plus the small editor-mode script (gallery-worker/), with a
+// free KV store for edits. The script only runs for /api/*; every other
+// request is a plain file. Run from the cache folder so the tool doesn't try
+// to configure this project.
 async function deploy() {
-  const output = await run(
-    process.execPath,
-    [
-      WRANGLER,
-      "deploy",
-      "--assets",
-      SITE_DIR,
-      "--name",
-      PROJECT,
-      "--compatibility-date",
-      "2026-10-01",
-    ],
-    60 * 60_000,
-    CACHE_DIR
+  const kvId = state.kvId ?? (await createEditStore())
+  await fsp.writeFile(
+    WORKER_CONFIG,
+    JSON.stringify(
+      {
+        name: PROJECT,
+        main: WORKER_SCRIPT,
+        compatibility_date: "2026-10-01",
+        assets: {
+          directory: SITE_DIR,
+          binding: "ASSETS",
+          run_worker_first: ["/api/*"],
+        },
+        kv_namespaces: [{ binding: "EDITS", id: kvId }],
+      },
+      null,
+      2
+    )
+  )
+  const output = await wrangler(
+    ["deploy", "--config", WORKER_CONFIG],
+    60 * 60_000
   )
   const url = output.match(/https:\/\/[a-z0-9.-]+\.workers\.dev/)?.[0]
   if (!url) throw new Error("Published, but Cloudflare didn't say where.")
   return url
+}
+
+function wrangler(args: string[], timeoutMs = 120_000) {
+  return run(process.execPath, [WRANGLER, ...args], timeoutMs, CACHE_DIR)
+}
+
+async function createEditStore() {
+  let output: string
+  try {
+    output = await wrangler(["kv", "namespace", "create", `${PROJECT}-edits`])
+  } catch (error) {
+    // Already made on an earlier attempt: find it in the list.
+    const listing = await wrangler(["kv", "namespace", "list"])
+    const found = (JSON.parse(listing) as { id: string; title: string }[]).find(
+      (ns) => ns.title.endsWith(`${PROJECT}-edits`)
+    )
+    if (!found) throw error
+    output = found.id
+  }
+  const id = output.match(/[0-9a-f]{32}/)?.[0]
+  if (!id) throw new Error("Couldn't set up storage for gallery edits.")
+  await setState({ kvId: id })
+  return id
+}
+
+// ---------- Editor mode ----------
+
+/** Sets (or, with null, removes) the password for editing in the gallery. */
+export async function setEditingPassword(password: string | null) {
+  if (!state.url)
+    throw new Error("Publish the gallery once before turning on editing.")
+  if (password !== null && password.length < 6)
+    throw new Error("Use at least 6 characters.")
+  // Make sure the editor-mode script is live before the secrets go in.
+  await deploy()
+  if (password === null) {
+    await wrangler([
+      "secret",
+      "delete",
+      "EDIT_PASSWORD_HASH",
+      "--name",
+      PROJECT,
+    ]).catch(() => {})
+    await setState({ editing: false })
+    return publishState()
+  }
+  // Only a salted hash leaves this Mac. A new signing key also logs out every
+  // device that was unlocked with the old password.
+  const salt = crypto.randomBytes(16).toString("hex")
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${salt}:${password}`)
+    .digest("hex")
+  const sessionKey = crypto.randomBytes(32).toString("hex")
+  await putSecret("EDIT_PASSWORD_HASH", `${salt}:${digest}`)
+  await putSecret("SESSION_KEY", sessionKey)
+  await run("security", [
+    "add-generic-password",
+    "-U",
+    "-s",
+    KEYCHAIN_SERVICE,
+    "-a",
+    "session-key",
+    "-w",
+    sessionKey,
+  ])
+  await setState({ editing: true })
+  return publishState()
+}
+
+// The secret goes in through stdin, so it never appears in a command line or log.
+function putSecret(name: string, value: string) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [WRANGLER, "secret", "put", name, "--name", PROJECT],
+      {
+        cwd: CACHE_DIR,
+        stdio: ["pipe", "ignore", "pipe"],
+      }
+    )
+    let stderr = ""
+    child.stderr.on("data", (chunk) => (stderr += chunk))
+    child.on("error", reject)
+    child.on("close", (code) =>
+      code === 0
+        ? resolve()
+        : reject(new Error(`Couldn't save ${name}: ${stderr.slice(-200)}`))
+    )
+    child.stdin.end(value)
+  })
+}
+
+async function macToken() {
+  const key = (
+    await run("security", [
+      "find-generic-password",
+      "-s",
+      KEYCHAIN_SERVICE,
+      "-a",
+      "session-key",
+      "-w",
+    ])
+  ).trim()
+  const expires = Date.now() + 5 * 60_000
+  const signature = crypto
+    .createHmac("sha256", key)
+    .update(`edit:${expires}`)
+    .digest("hex")
+  return `${expires}.${signature}`
+}
+
+type GalleryEdit = { id: string; itemId: string; op: string; value?: string }
+
+async function galleryApi(pathname: string, body: object) {
+  const res = await fetch(`${state.url}${pathname}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${await macToken()}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!res.ok) throw new Error(`The gallery answered ${res.status}`)
+  return res.json()
+}
+
+let pulling = false
+
+/** Collects edits made in the gallery and writes them into the library. */
+export async function pullGalleryEdits() {
+  if (!state.editing || !state.url || pulling) return
+  pulling = true
+  try {
+    const { edits } = (await galleryApi("/api/edits/pull", {})) as {
+      edits: GalleryEdit[]
+    }
+    const applied = new Set(state.appliedEditIds ?? [])
+    const fresh = edits.filter((edit) => !applied.has(edit.id))
+    if (!fresh.length) return
+
+    const { items } = await listItems()
+    const byPublicId = new Map(items.map((item) => [publicId(item), item]))
+    for (const edit of fresh) {
+      const item = byPublicId.get(edit.itemId)
+      if (item) {
+        try {
+          await applyEdit(item, edit)
+        } catch (error) {
+          console.warn(
+            `[edits] ${edit.op} on ${item.id}: ${errorMessage(error)}`
+          )
+        }
+      }
+      applied.add(edit.id) // Applied, or about something that's gone: either way, done.
+    }
+    // Kept in the gallery until a publish includes them, so nothing flickers back.
+    await setState({ appliedEditIds: [...applied] })
+    schedulePublish()
+  } catch (error) {
+    console.warn(`[edits] ${errorMessage(error)}`)
+  } finally {
+    pulling = false
+  }
+}
+
+async function applyEdit(item: Item, edit: GalleryEdit) {
+  const value = edit.value?.trim().toLowerCase()
+  switch (edit.op) {
+    case "addTag":
+      if (value && !item.tags.includes(value))
+        await updateItem(item.id, { tags: [...item.tags, value] })
+      return
+    case "removeTag":
+      await updateItem(item.id, {
+        tags: item.tags.filter((tag) => tag !== value),
+      })
+      return
+    case "removeAutoTag":
+      await updateItem(item.id, {
+        autoTags: item.autoTags.filter((tag) => tag !== value),
+      })
+      return
+    case "setTitle":
+      await updateItem(item.id, { title: edit.value ?? "" })
+      return
+    case "delete":
+      await deleteItem(item.id)
+      return
+  }
+}
+
+async function clearAppliedEdits() {
+  const ids = state.appliedEditIds ?? []
+  if (!ids.length || !state.editing) return
+  try {
+    await galleryApi("/api/edits/ack", { ids })
+    await setState({ appliedEditIds: [] })
+  } catch (error) {
+    console.warn(`[edits] ${errorMessage(error)}`)
+  }
+}
+
+export function startGallerySync() {
+  setInterval(() => void pullGalleryEdits(), PULL_EVERY_MS)
+  void pullGalleryEdits()
 }

@@ -136,7 +136,8 @@ async function capturePage(url: string): Promise<Capture> {
     return { url, files: [file] }
   }
 
-  let meta = parseMeta(await readText(res))
+  let html = await readText(res)
+  let meta = parseMeta(html)
   if (!hasMedia(meta)) {
     // Some sites only show preview tags to link-preview bots.
     const botRes = await fetch(url, {
@@ -145,8 +146,9 @@ async function capturePage(url: string): Promise<Capture> {
       signal: AbortSignal.timeout(20_000),
     }).catch(() => null)
     if (botRes?.ok) {
-      const botMeta = parseMeta(await readText(botRes))
-      if (hasMedia(botMeta)) meta = botMeta
+      const botHtml = await readText(botRes)
+      const botMeta = parseMeta(botHtml)
+      if (hasMedia(botMeta)) [html, meta] = [botHtml, botMeta]
     }
   }
 
@@ -172,7 +174,9 @@ async function capturePage(url: string): Promise<Capture> {
     }
   }
 
-  for (const video of videoCandidates(meta)) {
+  // Videos embedded in the page itself come first: preview tags often only
+  // carry a still with a play button drawn on it.
+  for (const video of [...new Set([...pageVideos(html), ...videoCandidates(meta)])]) {
     await tryDownload(video)
     if (files.length) break
   }
@@ -215,7 +219,13 @@ function parseAttrs(tag: string) {
   return attrs
 }
 
-function decodeEntities(value: string) {
+function decodeEntities(value: string): string {
+  // Some sites encode twice (&amp;#39;), so decode until nothing changes.
+  const once = decodeOnce(value)
+  return once === value ? once : decodeEntities(once)
+}
+
+function decodeOnce(value: string) {
   return value
     .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
     .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
@@ -248,6 +258,41 @@ function videoCandidates(meta: Meta) {
   return [...new Set([...og, ...(meta.get("twitter:player:stream") ?? [])])].filter(
     (url) => !/\.(html?|php)(\?|$)/i.test(url) && !/\/embed\//i.test(url)
   )
+}
+
+/**
+ * Video files the page plays directly, best quality first: a player's list of
+ * sources (LinkedIn's data-sources), schema.org VideoObject contentUrl, and
+ * plain <video>/<source> tags.
+ */
+function pageVideos(html: string) {
+  const found: { url: string; bitrate: number }[] = []
+  for (const [, raw] of html.matchAll(/data-sources="([^"]+)"/g)) {
+    try {
+      const sources = JSON.parse(decodeEntities(raw)) as { src?: string; type?: string; "data-bitrate"?: number }[]
+      for (const source of sources) {
+        if (source.src && (source.type ?? "video").startsWith("video")) {
+          found.push({ url: source.src, bitrate: source["data-bitrate"] ?? 0 })
+        }
+      }
+    } catch {
+      // Not a list of sources after all.
+    }
+  }
+  for (const [, url] of html.matchAll(/"contentUrl"\s*:\s*"([^"]+)"/g)) {
+    found.push({ url: url.replace(/\\\//g, "/"), bitrate: -1 })
+  }
+  for (const [tag] of html.matchAll(/<(?:video|source)\s[^>]*>/gi)) {
+    const attrs = parseAttrs(tag)
+    const type = attrs.type ?? ""
+    if (attrs.src && (type.startsWith("video") || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(attrs.src))) {
+      found.push({ url: attrs.src, bitrate: -2 })
+    }
+  }
+  return found
+    .filter(({ url }) => /^https?:\/\//.test(url) && !/\.m3u8(\?|$)/i.test(url))
+    .sort((a, b) => b.bitrate - a.bitrate)
+    .map(({ url }) => url)
 }
 
 function imageCandidates(meta: Meta) {

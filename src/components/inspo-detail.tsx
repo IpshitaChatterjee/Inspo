@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 
 import { FontMatch } from "@/components/font-match"
+import { useCanEdit } from "@/lib/gallery-edits"
 import { TagInput } from "@/components/tag-input"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
@@ -230,6 +231,7 @@ function DetailPanel({
   onUpdate,
   onDelete,
 }: DetailPanelProps) {
+  const canEdit = useCanEdit()
   const [title, setTitle] = React.useState(item.title ?? "")
   const [note, setNote] = React.useState(item.note)
   const host = hostOf(item.source)
@@ -287,7 +289,7 @@ function DetailPanel({
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 pt-2 pb-6">
         <div className="flex flex-col gap-2">
-          {GALLERY ? (
+          {!canEdit ? (
             item.title && (
               <h2 className="font-heading text-xl leading-snug font-medium">
                 {item.title}
@@ -323,7 +325,7 @@ function DetailPanel({
           )}
         </div>
 
-        {GALLERY ? (
+        {!canEdit ? (
           allTagsOf(item).length > 0 && (
             <Field label="Tags">
               <div className="flex flex-wrap gap-1.5">
@@ -415,9 +417,9 @@ function DetailPanel({
         </dl>
       </div>
 
-      {!GALLERY && (
+      {canEdit && (
         <div className="flex items-center gap-2 border-t border-border px-4 py-3">
-          {item.kind !== "link" && (
+          {item.kind !== "link" && !GALLERY && (
             <Button
               variant="ghost"
               size="sm"
