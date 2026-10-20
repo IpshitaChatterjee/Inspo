@@ -9,10 +9,10 @@ const defaults = {
   background:
     "radial-gradient(120% 45% at 50% 0%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 70%), radial-gradient(28% 16% at 22% 30%, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 70%), radial-gradient(34% 14% at 76% 24%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 70%), radial-gradient(70% 34% at 28% 100%, rgba(226,192,92,0.9) 0%, rgba(226,192,92,0) 70%), radial-gradient(50% 30% at 88% 96%, rgba(212,178,78,0.75) 0%, rgba(212,178,78,0) 70%), linear-gradient(180deg, #f5f8fb 0%, #c4ddf2 16%, #8fc0ea 36%, #a6cde0 50%, #98c487 64%, #78ab62 80%, #a9ab55 100%)",
   blur: 40,
-  dotSize: 1.5,
+  dotSize: 2,
   spacing: 9,
   dotColor: "#ffffff",
-  dotOpacity: 0.7,
+  dotOpacity: 0.9,
   shape: "square",
   blend: "soft-light",
 }
@@ -61,6 +61,9 @@ export default function DottedGlass({
       }}
     >
       <div
+        // React would drop the size and position below when only the
+        // background shorthand changes, so swap in a fresh layer instead.
+        key={background}
         style={{
           ...layer,
           // Oversized so the blur's soft edges fall outside the frame.

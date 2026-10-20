@@ -51,7 +51,7 @@ export default defineComponent({
       min: 0.5,
       max: 8,
       step: 0.5,
-      default: 1.5,
+      default: 2,
       unit: "px",
     },
     {
@@ -72,7 +72,7 @@ export default defineComponent({
       min: 0,
       max: 1,
       step: 0.05,
-      default: 0.7,
+      default: 0.9,
     },
     {
       key: "shape",
