@@ -20,6 +20,7 @@ import {
 } from "@/components/app-sidebar"
 import { DropOverlay } from "@/components/drop-overlay"
 import { EditLock } from "@/components/edit-lock"
+import { ComponentGrid } from "@/components/component-grid"
 import { CanEditContext } from "@/lib/gallery-edits"
 import { HowToSave } from "@/components/how-to-save"
 import { InspoDetail } from "@/components/inspo-detail"
@@ -46,7 +47,8 @@ import { useCurrentApp } from "@/hooks/use-current-app"
 import { useLibrary } from "@/hooks/use-library"
 import { looksLikeUrl, useSaver } from "@/hooks/use-saver"
 import { allTagsOf, GALLERY, hostOf, type Item, type Kind } from "@/lib/api"
-import { library as componentLibrary } from "@/library"
+import { library as componentLibrary, type LibraryEntry } from "@/library"
+import { componentTagCounts, filterComponents } from "@/library/search"
 
 type TypeFilter = "all" | Exclude<Kind, "link">
 
@@ -135,6 +137,8 @@ export function App() {
   const [open, setOpen] = React.useState<{ id: string; morph: boolean } | null>(
     null
   )
+  // Which component is opened; the opened view itself comes next.
+  const [, setOpenComponent] = React.useState<LibraryEntry | null>(null)
   const [adding, setAdding] = React.useState(false)
   const [help, setHelp] = React.useState(false)
   const searchRef = React.useRef<HTMLInputElement>(null)
@@ -151,13 +155,7 @@ export function App() {
 
   // The sidebar and phone chips are shared, so each app hands them its own tags.
   const componentTags = React.useMemo<TagCount[]>(
-    () =>
-      countTags(
-        componentLibrary.map((entry) => ({
-          tags: entry.meta.tags,
-          autoTags: [],
-        }))
-      ),
+    () => componentTagCounts(componentLibrary),
     []
   )
   const inspoTags = React.useMemo(() => countTags(items), [items])
@@ -171,18 +169,25 @@ export function App() {
     ? componentLibrary.filter((entry) => entry.meta.tags.length === 0).length
     : inspoUntagged
 
+  // Each app searches only its own things.
+  const visibleComponents = React.useMemo(
+    () => (inComponents ? filterComponents(componentLibrary, view, query) : []),
+    [inComponents, view, query]
+  )
   const visible = React.useMemo(
     () =>
-      items.filter(
-        (item) =>
-          (view.kind === "all" ||
-            (view.kind === "untagged"
-              ? isUntagged(item)
-              : allTagsOf(item).includes(view.name))) &&
-          (type === "all" || item.kind === type) &&
-          matches(item, query.trim())
-      ),
-    [items, view, type, query]
+      inComponents
+        ? []
+        : items.filter(
+            (item) =>
+              (view.kind === "all" ||
+                (view.kind === "untagged"
+                  ? isUntagged(item)
+                  : allTagsOf(item).includes(view.name))) &&
+              (type === "all" || item.kind === type) &&
+              matches(item, query.trim())
+          ),
+    [inComponents, items, view, type, query]
   )
 
   const openItem = open ? (items.find((i) => i.id === open.id) ?? null) : null
@@ -247,8 +252,10 @@ export function App() {
     const url = new URLSearchParams(window.location.search).get("add")
     if (!url) return
     window.history.replaceState(null, "", window.location.pathname)
+    // Links are saved into Inspo, so leave Components first.
+    setApp("inspo")
     void saveLink(url)
-  }, [saveLink])
+  }, [saveLink, setApp])
 
   const heading =
     view.kind === "all"
@@ -260,6 +267,7 @@ export function App() {
         : `#${view.name}`
   const resetKey = `${heading}|${type}|${query}`
   const filtering = type !== "all" || query.trim() !== ""
+  const filteringComponents = query.trim() !== ""
 
   return (
     <CanEditContext.Provider value={canEdit}>
@@ -361,23 +369,35 @@ export function App() {
                   {heading}
                 </motion.h1>
                 <span className="text-sm text-muted-foreground tabular-nums">
-                  {inComponents ? componentLibrary.length : visible.length}
-                  {!inComponents && filtering && ` of ${items.length}`}
+                  {inComponents ? visibleComponents.length : visible.length}
+                  {inComponents
+                    ? filteringComponents && ` of ${componentLibrary.length}`
+                    : filtering && ` of ${items.length}`}
                 </span>
               </div>
 
               {inComponents ? (
-                // Placeholder until the Components grid arrives.
-                <Empty className="flex-1">
-                  <EmptyHeader>
-                    <EmptyTitle className="font-heading">
-                      Nothing here yet
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      Your components will show up here.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
+                visibleComponents.length ? (
+                  <ComponentGrid
+                    entries={visibleComponents}
+                    onOpen={setOpenComponent}
+                  />
+                ) : (
+                  <Empty className="flex-1">
+                    <EmptyHeader>
+                      <EmptyTitle className="font-heading">
+                        {componentLibrary.length
+                          ? "No components match"
+                          : "Nothing here yet"}
+                      </EmptyTitle>
+                      <EmptyDescription>
+                        {componentLibrary.length
+                          ? "Try another search or tag."
+                          : "Components you make will show up here."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                )
               ) : !library && !error ? (
                 <div className="flex flex-1 items-center justify-center">
                   <Spinner className="size-6 text-muted-foreground" />
