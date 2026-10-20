@@ -24,13 +24,23 @@ const STATE_FILE = path.join(CACHE_DIR, "publish.json")
 const PROJECT = process.env.INSPO_SITE_NAME ?? "inspo"
 // Cloudflare's free plan: 25 MiB per file, 20,000 files per site.
 const MAX_FILE_BYTES = 25 * 1024 * 1024
+export const FILE_LIMIT = 20_000
+// Stop a little short of the limit, so a publish never fails halfway.
 const MAX_FILES = 19_500
 // Publish once things have been quiet for a while, and not too often
 // (the free plan allows about 500 updates a month).
 const QUIET_MS = 10 * 60_000
 const MIN_GAP_MS = 2 * 60 * 60_000
 
-const BROWSER_IMAGES = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"])
+const BROWSER_IMAGES = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "avif",
+  "svg",
+])
 const BROWSER_VIDEOS = new Set(["mp4", "m4v", "webm", "mov"])
 
 export type PublishState = {
@@ -38,6 +48,9 @@ export type PublishState = {
   url?: string
   publishedAt?: string
   items?: number
+  /** Files in the published site, against Cloudflare's free limit. */
+  files?: number
+  fileLimit?: number
   error?: string
   pending?: boolean
   signature?: string
@@ -51,7 +64,10 @@ let running = false
 
 export async function loadPublishState() {
   try {
-    state = { ...JSON.parse(await fsp.readFile(STATE_FILE, "utf8")), status: "idle" }
+    state = {
+      ...JSON.parse(await fsp.readFile(STATE_FILE, "utf8")),
+      status: "idle",
+    }
   } catch {
     state = { status: "idle" }
   }
@@ -86,10 +102,15 @@ export async function publishNow() {
   if (timer) clearTimeout(timer)
   await setState({ status: "publishing", error: undefined })
   try {
-    const { signature, count } = await buildSite()
+    const { signature, count, files } = await buildSite()
     if (signature === state.signature && state.url) {
       // Nothing visible changed since the last publish.
-      await setState({ status: "idle", pending: false })
+      await setState({
+        status: "idle",
+        pending: false,
+        files,
+        fileLimit: FILE_LIMIT,
+      })
     } else {
       const url = await deploy()
       await setState({
@@ -97,6 +118,8 @@ export async function publishNow() {
         pending: false,
         url,
         items: count,
+        files,
+        fileLimit: FILE_LIMIT,
         signature,
         publishedAt: new Date().toISOString(),
       })
@@ -112,8 +135,10 @@ export async function publishNow() {
 
 function friendlyError(error: unknown) {
   const text = `${errorMessage(error)} ${(error as { output?: string }).output ?? ""}`
-  if (/not logged in|authenticat|login/i.test(text)) return "Not signed in to Cloudflare."
-  if (/too many files|file count/i.test(text)) return "The gallery has more files than Cloudflare's free plan allows."
+  if (/not logged in|authenticat|login/i.test(text))
+    return "Not signed in to Cloudflare."
+  if (/too many files|file count/i.test(text))
+    return "The gallery has more files than Cloudflare's free plan allows."
   return errorMessage(error).split("\n")[0].slice(0, 200)
 }
 
@@ -121,7 +146,20 @@ function friendlyError(error: unknown) {
 
 async function buildSite() {
   // The gallery version of the app: same look, no editing.
-  await run(process.execPath, [VITE, "build", "--mode", "gallery", "--outDir", BUILD_DIR, "--emptyOutDir"], 5 * 60_000, ROOT)
+  await run(
+    process.execPath,
+    [
+      VITE,
+      "build",
+      "--mode",
+      "gallery",
+      "--outDir",
+      BUILD_DIR,
+      "--emptyOutDir",
+    ],
+    5 * 60_000,
+    ROOT
+  )
 
   await fsp.mkdir(MEDIA_DIR, { recursive: true })
   const { items } = await listItems()
@@ -148,12 +186,14 @@ async function buildSite() {
 
   // Remove media for things that were deleted.
   for (const name of await fsp.readdir(MEDIA_DIR)) {
-    if (!keep.has(name)) await fsp.rm(path.join(MEDIA_DIR, name), { force: true })
+    if (!keep.has(name))
+      await fsp.rm(path.join(MEDIA_DIR, name), { force: true })
   }
 
   // Swap in the freshly built app (everything except the media folder).
   for (const name of await fsp.readdir(SITE_DIR)) {
-    if (name !== "m") await fsp.rm(path.join(SITE_DIR, name), { recursive: true, force: true })
+    if (name !== "m")
+      await fsp.rm(path.join(SITE_DIR, name), { recursive: true, force: true })
   }
   await fsp.cp(BUILD_DIR, SITE_DIR, { recursive: true })
 
@@ -161,21 +201,37 @@ async function buildSite() {
   await fsp.writeFile(path.join(SITE_DIR, "data.json"), data)
   await fsp.writeFile(
     path.join(SITE_DIR, "_headers"),
-    ["/m/*", "  Cache-Control: public, max-age=31536000, immutable", "/data.json", "  Cache-Control: no-cache", ""].join("\n")
+    [
+      "/m/*",
+      "  Cache-Control: public, max-age=31536000, immutable",
+      "/data.json",
+      "  Cache-Control: no-cache",
+      "",
+    ].join("\n")
   )
 
   const fileCount = await countFiles(SITE_DIR)
   if (fileCount > MAX_FILES) {
-    throw new Error(`The gallery has ${fileCount} files, more than Cloudflare's free plan allows (20,000).`)
+    throw new Error(
+      `The gallery has ${fileCount} files, more than Cloudflare's free plan allows (20,000).`
+    )
   }
-  const assets = (await fsp.readdir(path.join(BUILD_DIR, "assets"))).sort().join(",")
-  return { signature: hash(data + assets), count: published.length }
+  const assets = (await fsp.readdir(path.join(BUILD_DIR, "assets")))
+    .sort()
+    .join(",")
+  return {
+    signature: hash(data + assets),
+    count: published.length,
+    files: fileCount,
+  }
 }
 
 async function countFiles(dir: string): Promise<number> {
   let total = 0
   for (const entry of await fsp.readdir(dir, { withFileTypes: true })) {
-    total += entry.isDirectory() ? await countFiles(path.join(dir, entry.name)) : 1
+    total += entry.isDirectory()
+      ? await countFiles(path.join(dir, entry.name))
+      : 1
   }
   return total
 }
@@ -194,7 +250,9 @@ async function exportMedia(file: Source, key: string) {
   const thumb = `${key}-t${path.extname(thumbSource).toLowerCase()}`
   await copyOnce(thumbSource, thumb)
 
-  const full = VIDEO_EXTS.has(file.ext) ? await exportVideo(file, key) : await exportImage(file, key)
+  const full = VIDEO_EXTS.has(file.ext)
+    ? await exportVideo(file, key)
+    : await exportImage(file, key)
   return { thumb, full }
 }
 
@@ -219,7 +277,22 @@ async function exportImage(file: Source, key: string) {
   if (await exists(target)) return name
   for (const maxSide of [0, 6000, 4000, 3000]) {
     const resize = maxSide ? ["-Z", String(maxSide)] : []
-    await run("sips", [...resize, "-s", "format", "jpeg", "-s", "formatOptions", "90", file.abs, "--out", target], 120_000)
+    await run(
+      "sips",
+      [
+        ...resize,
+        "-s",
+        "format",
+        "jpeg",
+        "-s",
+        "formatOptions",
+        "90",
+        file.abs,
+        "--out",
+        target,
+      ],
+      120_000
+    )
     if ((await sizeOf(target)) <= MAX_FILE_BYTES) return name
   }
   await fsp.rm(target, { force: true })
@@ -237,7 +310,19 @@ async function exportVideo(file: Source, key: string) {
   const target = path.join(MEDIA_DIR, name)
   if (await exists(target)) return name
   for (const preset of ["Preset1920x1080", "Preset1280x720"]) {
-    await run("avconvert", ["--source", file.abs, "--preset", preset, "--output", target, "--replace"], 30 * 60_000)
+    await run(
+      "avconvert",
+      [
+        "--source",
+        file.abs,
+        "--preset",
+        preset,
+        "--output",
+        target,
+        "--replace",
+      ],
+      30 * 60_000
+    )
     if ((await sizeOf(target)) <= MAX_FILE_BYTES) return name
   }
   // Too long to fit even at 720p: the gallery shows the still and links to the source.
@@ -252,7 +337,16 @@ async function exportVideo(file: Source, key: string) {
 async function deploy() {
   const output = await run(
     process.execPath,
-    [WRANGLER, "deploy", "--assets", SITE_DIR, "--name", PROJECT, "--compatibility-date", "2026-10-01"],
+    [
+      WRANGLER,
+      "deploy",
+      "--assets",
+      SITE_DIR,
+      "--name",
+      PROJECT,
+      "--compatibility-date",
+      "2026-10-01",
+    ],
     60 * 60_000,
     CACHE_DIR
   )

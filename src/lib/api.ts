@@ -35,9 +35,18 @@ export type PublishState = {
   url?: string
   publishedAt?: string
   items?: number
+  files?: number
+  fileLimit?: number
   error?: string
   pending?: boolean
 }
+
+/** How full the shared gallery is (0–1), once it has been published. */
+export function galleryFullness(state: PublishState | null) {
+  return state?.files && state.fileLimit ? state.files / state.fileLimit : 0
+}
+
+export const GALLERY_WARN_AT = 0.8
 
 export type Library = {
   items: Item[]
