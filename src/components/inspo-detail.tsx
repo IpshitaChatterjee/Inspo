@@ -3,20 +3,17 @@ import { motion } from "motion/react"
 import {
   ArrowUpRightIcon,
   CheckIcon,
-  ChevronLeftIcon,
   SparklesIcon,
-  ChevronRightIcon,
   FolderOpenIcon,
   GlobeIcon,
   Trash2Icon,
-  XIcon,
 } from "lucide-react"
 
+import { DetailNav, DetailShell, Field } from "@/components/detail-shell"
 import { FontMatch } from "@/components/font-match"
 import { useCanEdit } from "@/lib/gallery-edits"
 import { TagInput } from "@/components/tag-input"
 import { Button } from "@/components/ui/button"
-import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -47,13 +44,6 @@ type InspoDetailProps = {
 
 const spring = { type: "spring", stiffness: 260, damping: 30 } as const
 
-function isTyping(target: EventTarget | null) {
-  return (
-    target instanceof HTMLElement &&
-    !!target.closest("input, textarea, [contenteditable='true']")
-  )
-}
-
 export function InspoDetail({
   item,
   morph,
@@ -63,20 +53,6 @@ export function InspoDetail({
   onUpdate,
   onDelete,
 }: InspoDetailProps) {
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (isTyping(e.target)) (e.target as HTMLElement).blur()
-        else onClose()
-      }
-      if (isTyping(e.target)) return
-      if (e.key === "ArrowLeft") onStep(-1)
-      if (e.key === "ArrowRight") onStep(1)
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose, onStep])
-
   const ratio =
     item.width && item.height
       ? item.width / item.height
@@ -85,75 +61,41 @@ export function InspoDetail({
         : 0.8
 
   return (
-    <div
-      role="dialog"
-      aria-modal
-      aria-label={item.title ?? item.name}
-      className="fixed inset-0 z-50"
-    >
-      <motion.div
-        className="absolute inset-0 bg-background/85 backdrop-blur-2xl"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.25 }}
-        onClick={onClose}
-      />
-
-      {/* Phones: image on top, details underneath, all scrolling together.
-          Wider screens: image beside a fixed details panel. */}
-      <div className="relative flex h-full flex-col overflow-y-auto md:pointer-events-none md:flex-row md:overflow-hidden">
-        <Button
-          variant="secondary"
-          size="icon-sm"
-          aria-label="Close"
-          onClick={onClose}
-          className="fixed top-3 right-3 z-10 rounded-full shadow-md md:hidden"
+    <DetailShell
+      label={item.title ?? item.name}
+      onClose={onClose}
+      onStep={onStep}
+      media={
+        <motion.div
+          key={item.id}
+          layoutId={morph ? `media-${item.id}` : undefined}
+          initial={morph ? undefined : { opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={morph ? undefined : { opacity: 0, scale: 0.96 }}
+          transition={spring}
+          style={
+            {
+              aspectRatio: String(ratio),
+              "--ratio": ratio,
+            } as React.CSSProperties
+          }
+          className="pointer-events-auto relative w-[min(100%,calc(60svh*var(--ratio)))] overflow-hidden rounded-2xl bg-muted shadow-2xl ring-1 ring-foreground/10 md:w-[min(100%,calc((100svh-6rem)*var(--ratio)))]"
         >
-          <XIcon />
-        </Button>
-        <div
-          className="flex min-w-0 shrink-0 items-center justify-center px-4 pt-14 pb-4 md:flex-1 md:p-12"
-          onClick={(e) => e.target === e.currentTarget && onClose()}
-        >
-          <motion.div
-            key={item.id}
-            layoutId={morph ? `media-${item.id}` : undefined}
-            initial={morph ? undefined : { opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={morph ? undefined : { opacity: 0, scale: 0.96 }}
-            transition={spring}
-            style={
-              {
-                aspectRatio: String(ratio),
-                "--ratio": ratio,
-              } as React.CSSProperties
-            }
-            className="pointer-events-auto relative w-[min(100%,calc(60svh*var(--ratio)))] overflow-hidden rounded-2xl bg-muted shadow-2xl ring-1 ring-foreground/10 md:w-[min(100%,calc((100svh-6rem)*var(--ratio)))]"
-          >
-            <DetailMedia item={item} />
-          </motion.div>
-        </div>
-
-        <motion.aside
-          initial={{ x: 48, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 48, opacity: 0 }}
-          transition={{ ...spring, delay: 0.04 }}
-          className="pointer-events-auto flex w-full shrink-0 flex-col border-t border-border bg-background/90 backdrop-blur-xl md:h-full md:w-[380px] md:border-t-0 md:border-l"
-        >
-          <DetailPanel
-            key={item.id}
-            item={item}
-            tags={tags}
-            onClose={onClose}
-            onStep={onStep}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-          />
-        </motion.aside>
-      </div>
-    </div>
+          <DetailMedia item={item} />
+        </motion.div>
+      }
+      panel={
+        <DetailPanel
+          key={item.id}
+          item={item}
+          tags={tags}
+          onClose={onClose}
+          onStep={onStep}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+        />
+      }
+    />
   )
 }
 
@@ -252,40 +194,7 @@ function DetailPanel({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Previous"
-            onClick={() => onStep(-1)}
-          >
-            <ChevronLeftIcon />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Next"
-            onClick={() => onStep(1)}
-          >
-            <ChevronRightIcon />
-          </Button>
-          <span className="ml-1 hidden items-center gap-1 text-xs text-muted-foreground lg:flex">
-            <Kbd>←</Kbd>
-            <Kbd>→</Kbd>
-          </span>
-        </div>
-        {/* Phones have a floating close button instead. */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Close"
-          onClick={onClose}
-          className="hidden md:inline-flex"
-        >
-          <XIcon />
-        </Button>
-      </div>
+      <DetailNav onStep={onStep} onClose={onClose} />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 pt-2 pb-6">
         <div className="flex flex-col gap-2">
@@ -496,21 +405,6 @@ function Swatch({
         </TooltipContent>
       </Tooltip>
     </motion.span>
-  )
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-    </div>
   )
 }
 
