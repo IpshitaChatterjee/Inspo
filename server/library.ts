@@ -34,6 +34,8 @@ export type Meta = {
   text?: string
   colors?: string[]
   palette?: string[]
+  /** Closest Google Fonts to the headline, best first. */
+  fonts?: { family: string; weight: number }[]
   /** Caption tags have been added once; don't add them again after you remove some. */
   captionTagged?: boolean
   analyzedAt?: string
@@ -63,6 +65,7 @@ export type Item = {
   text: string | null
   colors: string[]
   palette: string[]
+  fonts: { family: string; weight: number }[]
   version: number
   /** Only in the published gallery: where its files are. */
   media?: { thumb: string; full: string | null }
@@ -281,6 +284,7 @@ export async function listItems() {
       text: meta.text ?? null,
       colors: meta.colors ?? [],
       palette: meta.palette ?? [],
+      fonts: meta.fonts ?? [],
       version: Math.round(file.mtimeMs),
     })
   }
@@ -304,6 +308,7 @@ export async function listItems() {
       text: null,
       colors: [],
       palette: [],
+      fonts: [],
       version: 0,
     })
   }
@@ -400,7 +405,7 @@ export async function reveal(id: string) {
 
 const analyzeQueue = limiter(2)
 // Bump when analysis learns something new, so older items get looked at again.
-const ANALYSIS_VERSION = 9
+const ANALYSIS_VERSION = 11
 let analyzing = false
 
 /** Tags every file that hasn't been looked at yet, a couple at a time. */
@@ -444,6 +449,7 @@ async function analyzeNew() {
           meta.text = result.text || undefined
           meta.colors = result.colors.names
           meta.palette = result.colors.palette
+          meta.fonts = result.fonts.map(({ family, weight }) => ({ family, weight }))
           meta.analyzedAt = new Date().toISOString()
           meta.analysisVersion = ANALYSIS_VERSION
           // Save in batches so a big first run doesn't rewrite the file thousands of times.

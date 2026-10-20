@@ -87,6 +87,7 @@ function matches(item: Item, query: string) {
     item.name,
     item.text,
     hostOf(item.source),
+    ...item.fonts.map((font) => font.family),
     ...allTagsOf(item),
   ]
     .filter(Boolean)

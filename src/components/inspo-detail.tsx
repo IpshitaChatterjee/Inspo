@@ -12,6 +12,7 @@ import {
   XIcon,
 } from "lucide-react"
 
+import { FontMatch } from "@/components/font-match"
 import { TagInput } from "@/components/tag-input"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
@@ -369,6 +370,12 @@ function DetailPanel({
                 <Swatch key={hex} hex={hex} name={item.colors[i]} index={i} />
               ))}
             </div>
+          </Field>
+        )}
+
+        {item.fonts.length > 0 && (
+          <Field label="Closest Google Font">
+            <FontMatch fonts={item.fonts} />
           </Field>
         )}
 

@@ -1,6 +1,7 @@
 import path from "node:path"
 
 import { colorsOf, type Colors } from "./colors.ts"
+import { closestFonts, type FontMatch, type TextLine } from "./fonts.ts"
 import { mediaFile, VIDEO_EXTS } from "./media.ts"
 import { run } from "./util.ts"
 
@@ -13,20 +14,27 @@ const SCRIPT = path.join(import.meta.dirname, "vision.js")
 export const IGNORED_TAGS = new Set(["document", "screenshot"])
 const MAX_TEXT = 1500
 
-export type Analysis = { tags: string[]; text: string; headline: string | null; colors: Colors }
+export type Analysis = {
+  tags: string[]
+  text: string
+  headline: string | null
+  colors: Colors
+  fonts: FontMatch[]
+}
 
 const NO_COLORS: Colors = { names: [], palette: [] }
 
-type Line = { text: string; x: number; y: number; h: number }
+type Line = TextLine
 
 type Source = { abs: string; ext: string; size: number; mtimeMs: number }
 
 export async function analyze(source: Source): Promise<Analysis> {
   // Videos are read from their poster frame; vectors can't be read at all.
   // Images use the full size so small text is still legible.
-  if (source.ext === "svg") return { tags: [], text: "", headline: null, colors: NO_COLORS }
+  const nothing: Analysis = { tags: [], text: "", headline: null, colors: NO_COLORS, fonts: [] }
+  if (source.ext === "svg") return nothing
   const image = await mediaFile(source, VIDEO_EXTS.has(source.ext) ? "thumb" : "large")
-  if (!image) return { tags: [], text: "", headline: null, colors: NO_COLORS }
+  if (!image) return nothing
 
   const out = await run("osascript", ["-l", "JavaScript", SCRIPT, image], 60_000)
   const parsed = JSON.parse(out) as { labels: string[]; lines: Line[] }
@@ -38,6 +46,7 @@ export async function analyze(source: Source): Promise<Analysis> {
     text: parsed.lines.map((line) => line.text).join("\n").slice(0, MAX_TEXT),
     headline: headline(parsed.lines),
     colors: await colorsOf(image).catch(() => NO_COLORS),
+    fonts: await closestFonts(image, parsed.lines).catch(() => []),
   }
 }
 

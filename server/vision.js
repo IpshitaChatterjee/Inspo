@@ -1,6 +1,6 @@
 // Reads an image with macOS's built-in Vision framework (on-device, offline).
 // Run with: osascript -l JavaScript vision.js <image path>
-// Prints {"labels": [...], "lines": [{ text, x, y, h }]} as JSON, where x/y/h are
+// Prints {"labels": [...], "lines": [{ text, x, y, w, h }]} as JSON, where x/y/w/h are
 // the line's position and height as fractions of the image (y counts from the bottom).
 ObjC.import("Foundation")
 ObjC.import("Vision")
@@ -39,6 +39,7 @@ function run(argv) {
       x: box.origin.x,
       y: box.origin.y,
       h: box.size.height,
+      w: box.size.width,
     })
   }
 

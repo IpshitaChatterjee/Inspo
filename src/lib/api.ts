@@ -25,6 +25,8 @@ export type Item = {
   colors: string[]
   /** One swatch per colour, as hex. */
   palette: string[]
+  /** Closest Google Fonts to the image's headline, best first (empty when unsure). */
+  fonts: { family: string; weight: number }[]
   version: number
   /** Only in the published gallery: where its files are. */
   media?: { thumb: string; full: string | null }

@@ -116,13 +116,16 @@ export function AppSidebar({
             active={isActive({ kind: "all" })}
             onClick={() => onView({ kind: "all" })}
           />
-          <NavRow
-            icon={<InboxIcon />}
-            label="Untagged"
-            count={untaggedCount}
-            active={isActive({ kind: "untagged" })}
-            onClick={() => onView({ kind: "untagged" })}
-          />
+          {/* Only when there's something untagged (or you're looking at it). */}
+          {(untaggedCount > 0 || isActive({ kind: "untagged" })) && (
+            <NavRow
+              icon={<InboxIcon />}
+              label="Untagged"
+              count={untaggedCount}
+              active={isActive({ kind: "untagged" })}
+              onClick={() => onView({ kind: "untagged" })}
+            />
+          )}
         </div>
 
         <section className="flex flex-col gap-0.5">
@@ -180,7 +183,7 @@ export function AppSidebar({
                           }}
                         >
                           <Trash2Icon />
-                          Remove from everything
+                          Remove
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
