@@ -2,6 +2,7 @@ import * as React from "react"
 import { motion } from "motion/react"
 import {
   ArrowUpRightIcon,
+  CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   FolderOpenIcon,
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api, hostOf, mediaUrl, type Item, type Patch } from "@/lib/api"
 
 type InspoDetailProps = {
@@ -243,18 +245,7 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
           <Field label="Colours">
             <div className="flex gap-1.5">
               {item.palette.map((hex, i) => (
-                <motion.button
-                  key={hex}
-                  type="button"
-                  title={`${item.colors[i]} · ${hex} (click to copy)`}
-                  initial={{ opacity: 0, scale: 0.6 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 24, delay: i * 0.04 }}
-                  whileHover={{ scale: 1.12 }}
-                  onClick={() => void navigator.clipboard.writeText(hex)}
-                  style={{ backgroundColor: hex }}
-                  className="size-7 rounded-full ring-1 ring-foreground/10"
-                />
+                <Swatch key={hex} hex={hex} name={item.colors[i]} index={i} />
               ))}
             </div>
           </Field>
@@ -308,6 +299,47 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
         </Button>
       </div>
     </>
+  )
+}
+
+// A colour from the image: hover shows its hex code, click copies it.
+function Swatch({ hex, name, index }: { hex: string; name?: string; index: number }) {
+  const [copied, setCopied] = React.useState(false)
+  const label = hex.toUpperCase()
+  return (
+    <motion.span
+      initial={{ opacity: 0, scale: 0.6 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ type: "spring", stiffness: 400, damping: 24, delay: index * 0.04 }}
+    >
+      <Tooltip onOpenChange={(open) => !open && setCopied(false)}>
+        <TooltipTrigger
+          closeOnClick={false}
+          render={
+            <button
+              type="button"
+              aria-label={`Copy ${name ?? "colour"} ${label}`}
+              onClick={() => {
+                void navigator.clipboard.writeText(label)
+                setCopied(true)
+              }}
+              style={{ backgroundColor: hex }}
+              className="block size-7 rounded-full ring-1 ring-foreground/10 transition-transform duration-200 ease-out hover:scale-110 active:scale-95"
+            />
+          }
+        />
+        <TooltipContent className="font-mono">
+          {copied ? (
+            <span className="flex items-center gap-1">
+              <CheckIcon className="size-3" />
+              Copied
+            </span>
+          ) : (
+            label
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </motion.span>
   )
 }
 
