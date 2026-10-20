@@ -2,14 +2,29 @@ import * as React from "react"
 import {
   ArrowUpRightIcon,
   GlobeIcon,
+  KeyRoundIcon,
   LockIcon,
-  LockOpenIcon,
+  MoreHorizontalIcon,
   RefreshCwIcon,
   TriangleAlertIcon,
 } from "lucide-react"
 import { cn } from "cn"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { GALLERY_WARN_AT, galleryFullness, type PublishState } from "@/lib/api"
@@ -76,16 +91,24 @@ export function GalleryStatus({
           <GlobeIcon className="size-3.5" />
           Shared gallery
         </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Publish now"
-          title="Publish now"
-          disabled={publishing}
-          onClick={onPublish}
-        >
-          {publishing ? <Spinner className="size-3" /> : <RefreshCwIcon />}
-        </Button>
+        <span className="flex items-center">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Publish now"
+            title="Publish now"
+            disabled={publishing}
+            onClick={onPublish}
+          >
+            {publishing ? <Spinner className="size-3" /> : <RefreshCwIcon />}
+          </Button>
+          {state?.url && (
+            <GalleryMenu
+              editing={!!state.editing}
+              onSetPassword={onSetPassword}
+            />
+          )}
+        </span>
       </div>
       {state?.url && (
         <a
@@ -99,12 +122,6 @@ export function GalleryStatus({
         </a>
       )}
       <span className="text-[11px] text-muted-foreground">{detail}</span>
-      {state?.url && (
-        <EditingControls
-          editing={!!state.editing}
-          onSetPassword={onSetPassword}
-        />
-      )}
       {nearlyFull && (
         <div className="flex flex-col gap-1 pt-0.5">
           <div className="h-1 overflow-hidden rounded-full bg-amber-500/20">
@@ -125,8 +142,11 @@ export function GalleryStatus({
   )
 }
 
-/** Turns editor mode in the gallery on or off, or changes its password. */
-function EditingControls({
+/**
+ * Settings for editing in the shared gallery. Kept in a menu because it's
+ * about the gallery, not this app (which can always edit).
+ */
+function GalleryMenu({
   editing,
   onSetPassword,
 }: {
@@ -145,84 +165,87 @@ function EditingControls({
       await onSetPassword(next)
       setOpen(false)
       setPassword("")
+      toast.success(
+        next ? "Gallery password saved" : "Editing in the gallery is off"
+      )
     } catch (err) {
-      setError((err as Error).message)
+      const message = (err as Error).message
+      if (next) setError(message)
+      else toast.error(message)
     } finally {
       setBusy(false)
     }
   }
 
-  if (open) {
-    return (
-      <form
-        className="flex flex-col gap-1.5 pt-1"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void apply(password)
-        }}
-      >
-        <Input
-          type="password"
-          autoFocus
-          autoComplete="new-password"
-          placeholder="Editing password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="h-8 text-xs"
-        />
-        {error && <span className="text-[11px] text-destructive">{error}</span>}
-        <div className="flex gap-1">
-          <Button
-            type="submit"
-            size="xs"
-            disabled={password.length < 6 || busy}
-          >
-            {busy ? "Saving…" : "Save"}
-          </Button>
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            onClick={() => setOpen(false)}
-          >
-            Cancel
-          </Button>
-        </div>
-      </form>
-    )
-  }
-
   return (
-    <div className="flex items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
-      {editing ? (
-        <LockOpenIcon className="size-3" />
-      ) : (
-        <LockIcon className="size-3" />
-      )}
-      <span>{editing ? "Editing on" : "View only"}</span>
-      <span className="ml-auto flex gap-1">
-        <button
-          type="button"
-          className="underline-offset-2 hover:text-foreground hover:underline"
-          onClick={() => setOpen(true)}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Gallery settings"
+              title="Gallery settings"
+            />
+          }
         >
-          {editing ? "Change password" : "Turn on editing"}
-        </button>
-        {editing && (
-          <>
-            ·
-            <button
-              type="button"
+          <MoreHorizontalIcon />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onClick={() => setOpen(true)}>
+            <KeyRoundIcon />
+            {editing ? "Change gallery password…" : "Set gallery password…"}
+          </DropdownMenuItem>
+          {editing && (
+            <DropdownMenuItem
+              variant="destructive"
               disabled={busy}
-              className="underline-offset-2 hover:text-foreground hover:underline"
               onClick={() => void apply(null)}
             >
-              Off
-            </button>
-          </>
-        )}
-      </span>
-      {error && <span className="text-destructive">{error}</span>}
-    </div>
+              <LockIcon />
+              Turn off gallery editing
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {editing ? "Change gallery password" : "Set gallery password"}
+            </DialogTitle>
+            <DialogDescription>
+              Lets you change tags and titles, or delete things, from the shared
+              gallery on any device.
+              {editing &&
+                " Devices unlocked with the old password will need the new one."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void apply(password)
+            }}
+          >
+            <Input
+              type="password"
+              autoFocus
+              autoComplete="new-password"
+              placeholder="At least 6 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={!!error}
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" disabled={password.length < 6 || busy}>
+              {busy ? "Saving…" : "Save password"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
