@@ -1,7 +1,6 @@
 import * as React from "react"
 import { motion } from "motion/react"
 import {
-  FolderOpenIcon,
   HashIcon,
   LayersIcon,
   MoreHorizontalIcon,
@@ -34,7 +33,6 @@ type AppSidebarProps = {
   view: View
   publish: PublishState | null
   onView: (view: View) => void
-  onHelp: () => void
   onPublish: () => void
 }
 
@@ -66,7 +64,6 @@ export function AppSidebar({
   view,
   publish,
   onView,
-  onHelp,
   onPublish,
 }: AppSidebarProps) {
   const [renaming, setRenaming] = React.useState<string | null>(null)
@@ -192,26 +189,8 @@ export function AppSidebar({
       </nav>
 
       {!GALLERY && (
-        <div className="flex flex-col gap-0.5 border-t border-sidebar-border p-3">
+        <div className="border-t border-sidebar-border p-3">
           <GalleryStatus state={publish} onPublish={onPublish} />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-1.5 justify-start"
-            onClick={onHelp}
-          >
-            <SparklesIcon />
-            How to save from anywhere
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="justify-start"
-            onClick={() => void api.reveal()}
-          >
-            <FolderOpenIcon />
-            Open folder in Finder
-          </Button>
         </div>
       )}
     </aside>
