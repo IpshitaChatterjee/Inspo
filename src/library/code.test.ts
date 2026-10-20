@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { bakeValues } from "./code"
+import { bakeValues, forCopy } from "./code"
 import { defaultValues, type Control } from "./types"
 
 const source = `"use client"\nimport { useState } from "react"\n// @inspo-defaults-start\nconst defaults = { size: 2 }\n// @inspo-defaults-end\nexport default function X() { return null }\n`
@@ -72,5 +72,20 @@ describe("library code", () => {
       round: true,
       bg: "linear-gradient(#9cc9ff, #9fc48a)",
     })
+  })
+})
+
+describe("forCopy", () => {
+  test("swaps an uploaded image for the placeholder and keeps the gradient", () => {
+    const out = forCopy(
+      { bg: 'url("blob:http://x/1"), linear-gradient(#111, #222)' },
+      controls
+    )
+    expect(out.bg).toBe('url("/your-image.jpg"), linear-gradient(#111, #222)')
+  })
+
+  test("leaves everything else alone", () => {
+    const values = { size: 3, bg: "linear-gradient(#111, #222)" }
+    expect(forCopy(values, controls)).toEqual(values)
   })
 })

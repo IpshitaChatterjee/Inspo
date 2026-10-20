@@ -14,6 +14,20 @@ function placeholderForUpload(value: string): string | null {
   return `url("/your-image.jpg"), ${match[2]}`
 }
 
+// What leaves the app (copied code or a copied prompt): uploaded images become
+// the placeholder path, everything else stays as it is.
+export function forCopy(values: Values, controls: Control[]): Values {
+  const out: Values = { ...values }
+  for (const control of controls) {
+    const value = out[control.key]
+    if (control.type === "image" && typeof value === "string") {
+      const placeholder = placeholderForUpload(value)
+      if (placeholder) out[control.key] = placeholder
+    }
+  }
+  return out
+}
+
 export function bakeValues(
   source: string,
   values: Values,
@@ -25,15 +39,12 @@ export function bakeValues(
     throw new Error("Missing defaults block")
   }
 
+  const copied = forCopy(values, controls)
   const lines: string[] = []
   for (const control of controls) {
-    let value: ControlValue = values[control.key] ?? control.default
-    if (control.type === "image" && typeof value === "string") {
-      const placeholder = placeholderForUpload(value)
-      if (placeholder) {
-        value = placeholder
-        lines.push(`  ${PLACEHOLDER_NOTE}`)
-      }
+    const value: ControlValue = copied[control.key] ?? control.default
+    if (value !== (values[control.key] ?? control.default)) {
+      lines.push(`  ${PLACEHOLDER_NOTE}`)
     }
     lines.push(`  ${control.key}: ${JSON.stringify(value)},`)
   }

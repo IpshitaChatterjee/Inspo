@@ -1,6 +1,6 @@
 import ts from "typescript"
 import { describe, expect, test } from "vitest"
-import { bakeValues, DEFAULTS_END, DEFAULTS_START } from "./code"
+import { bakeValues, DEFAULTS_END, forCopy, DEFAULTS_START } from "./code"
 import { library } from "./index"
 import { defaultValues, type ComponentMeta } from "./types"
 
@@ -160,6 +160,18 @@ for (const entry of library) {
         reportDiagnostics: true,
       })
       expect(out.diagnostics ?? []).toHaveLength(0)
+    })
+
+    // Copy prompt must never hand out an address that only works in this tab.
+    test("prompt never contains an uploaded file's address", () => {
+      const values = defaultValues(entry.meta.controls)
+      for (const c of entry.meta.controls) {
+        if (c.type !== "image") continue
+        values[c.key] = `url("blob:http://x/1"), ${c.default}`
+      }
+      const prompt = entry.meta.prompt(forCopy(values, entry.meta.controls))
+      expect(prompt).not.toContain("blob:")
+      expect(prompt).not.toContain("data:")
     })
 
     test("prompt mentions every current value", () => {

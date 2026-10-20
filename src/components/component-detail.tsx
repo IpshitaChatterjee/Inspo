@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { copyText } from "@/lib/copy-text"
 import type { LibraryEntry } from "@/library"
-import { bakeValues } from "@/library/code"
+import { bakeValues, forCopy } from "@/library/code"
 import { defaultValues, type ControlValue, type Values } from "@/library/types"
 
 type LoadedComponent = Awaited<ReturnType<LibraryEntry["load"]>>["default"]
@@ -207,19 +207,28 @@ function ComponentPanel({
       <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-background/90 px-6 py-3 backdrop-blur-xl md:static md:bg-transparent md:backdrop-blur-none">
         <Button
           className="flex-1"
-          onClick={() => void copy(meta.prompt(values), "Prompt copied")}
+          onClick={() =>
+            void copy(
+              meta.prompt(forCopy(values, meta.controls)),
+              "Prompt copied"
+            )
+          }
         >
           <SparklesIcon />
           Copy prompt
         </Button>
         <Button
           className="flex-1 bg-foreground text-background hover:bg-foreground/85"
-          onClick={() =>
-            void copy(
-              bakeValues(entry.source, values, meta.controls),
-              "Code copied — paste it into a React or Next.js file"
-            )
-          }
+          onClick={() => {
+            try {
+              void copy(
+                bakeValues(entry.source, values, meta.controls),
+                "Code copied — paste it into a React or Next.js file"
+              )
+            } catch {
+              toast.error("Couldn't copy. Something went wrong.")
+            }
+          }}
         >
           <CodeIcon />
           Copy code

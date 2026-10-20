@@ -17,7 +17,7 @@ and run `npx vite build` first so the page is up to date).
 
 - **Mac:** drag images, videos or links onto the window, paste with ⌘V, or drop files into the Inspo folder in Finder.
 - **iPhone:** Share → Save to Files → iCloud Drive → Inspo. For links, set up the “Save to Inspo” Shortcut
-  (steps are in the app under *How to save from anywhere*); it drops links into `Inspo/_inbox`.
+  (steps are in the app under _How to save from anywhere_); it drops links into `Inspo/_inbox`.
 - Links are turned into real image/video files: tweets via the public fxtwitter API, other pages via their
   preview image or video. If nothing can be grabbed, the link is kept as a card.
 
@@ -32,6 +32,30 @@ notes) to Cloudflare's free static hosting, so it can be browsed on any phone an
 - Media is copied at full quality. Files over 25 MB (the free plan's per-file limit) are re-encoded:
   images as high-quality JPEG, videos at 1080p or 720p; videos that still don't fit show as a still.
 - The free plan allows 20,000 files, roughly 9,000 items. `INSPO_SITE_NAME` changes the site name.
+
+## Components
+
+Next to Inspo there is a second app, **Components**: a grid of live, tweakable pieces of interface that
+you made. Switch between the two from the wordmark at the top of the sidebar (on phones, the small button
+at the left of the top bar). Open one to play with its controls, then press **Copy prompt** (a description
+you can paste into any AI chat) or **Copy code** (the finished file, with your current settings built in).
+Components also show up in the shared gallery, where they can be tweaked and copied without any password.
+
+**Making a new one:** ask Claude in a chat to build it into `src/library/<slug>/`. Each component is one folder:
+
+- `component.tsx`: the component itself, which is what Copy code hands out.
+- `meta.tsx`: its title, description, tags, controls (sliders, colours, toggles, images…) and the prompt text.
+
+**The copy contract.** So the copied code works when pasted into someone else's React or Next.js project,
+`component.tsx` must be:
+
+- one self-contained file, starting with `"use client"`, with a default-exported component;
+- importing only from `react`, with inline styles or a `<style>` tag (no Tailwind, no other libraries);
+- holding its settings in a `const defaults = { … }` block between the `// @inspo-defaults-start` and
+  `// @inspo-defaults-end` comments, which Copy code rewrites with the current values.
+
+An image you upload in the controls becomes `/your-image.jpg` in the copied code (the built-in gradient still
+shows until you add that file). `npm test` checks every component against all of this.
 
 ## Where things live
 

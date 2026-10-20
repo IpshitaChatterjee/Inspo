@@ -11,6 +11,8 @@ export async function copyText(text: string): Promise<boolean> {
     // Try the old way below.
   }
 
+  // The fallback steals focus; hand it back afterwards.
+  const previous = document.activeElement
   const textarea = document.createElement("textarea")
   textarea.value = text
   textarea.setAttribute("readonly", "")
@@ -20,10 +22,12 @@ export async function copyText(text: string): Promise<boolean> {
   document.body.appendChild(textarea)
   try {
     textarea.select()
+    textarea.setSelectionRange(0, text.length) // iOS ignores select()
     return document.execCommand("copy")
   } catch {
     return false
   } finally {
     textarea.remove()
+    if (previous instanceof HTMLElement) previous.focus()
   }
 }

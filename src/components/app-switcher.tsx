@@ -24,10 +24,13 @@ export function AppSwitcher({
   app,
   counts,
   onChange,
+  compact = false,
 }: {
   app: AppName
   counts: Record<AppName, number>
   onChange: (app: AppName) => void
+  /** Icon and arrow only, for the phone header where the sidebar is hidden. */
+  compact?: boolean
 }) {
   const current = APPS.find((a) => a.name === app) ?? APPS[0]
   return (
@@ -37,16 +40,20 @@ export function AppSwitcher({
           <Button
             variant="ghost"
             aria-label="Switch app"
-            className="-ml-2 h-auto gap-2 px-2 py-1"
+            className={
+              compact ? "h-9 gap-1.5 px-1.5" : "-ml-2 h-auto gap-2 px-2 py-1"
+            }
           />
         }
       >
         <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <current.icon className="size-4" />
         </span>
-        <span className="font-heading text-lg font-semibold tracking-tight">
-          {current.label}
-        </span>
+        {!compact && (
+          <span className="font-heading text-lg font-semibold tracking-tight">
+            {current.label}
+          </span>
+        )}
         <ChevronsUpDownIcon className="text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52">

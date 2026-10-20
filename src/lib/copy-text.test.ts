@@ -14,16 +14,23 @@ function stubBrowser({
     style: {} as Record<string, string>,
     setAttribute: vi.fn(),
     select: vi.fn(),
+    setSelectionRange: vi.fn(),
     remove: vi.fn(),
   }
+  class FakeElement {
+    focus = vi.fn()
+  }
+  const previous = new FakeElement()
+  vi.stubGlobal("HTMLElement", FakeElement)
   const document = {
+    activeElement: previous as unknown,
     createElement: vi.fn(() => textarea),
     body: { appendChild: vi.fn() },
     execCommand: vi.fn(execCommand),
   }
   vi.stubGlobal("navigator", writeText ? { clipboard: { writeText } } : {})
   vi.stubGlobal("document", document)
-  return { document, textarea }
+  return { document, textarea, previous }
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -46,6 +53,13 @@ describe("copyText", () => {
     expect(document.execCommand).toHaveBeenCalledWith("copy")
     expect(textarea.value).toBe("x")
     expect(textarea.remove).toHaveBeenCalled()
+  })
+
+  test("puts focus back where it was after the fallback", async () => {
+    const { textarea, previous } = stubBrowser({ execCommand: () => true })
+    await copyText("hello")
+    expect(textarea.setSelectionRange).toHaveBeenCalledWith(0, 5)
+    expect(previous.focus).toHaveBeenCalled()
   })
 
   test("falls back to execCommand when there's no clipboard", async () => {

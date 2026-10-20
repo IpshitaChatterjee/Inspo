@@ -14,6 +14,16 @@ function isTyping(target: EventTarget | null) {
   )
 }
 
+// Arrow keys belong to an open dropdown, not to the item behind it.
+function inMenu(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    !!target.closest(
+      '[role="listbox"], [role="option"], [role="menu"], [role="menuitem"]'
+    )
+  )
+}
+
 type DetailShellProps = {
   label: string
   onClose: () => void
@@ -38,7 +48,7 @@ export function DetailShell({
         if (isTyping(e.target)) (e.target as HTMLElement).blur()
         else onClose()
       }
-      if (isTyping(e.target)) return
+      if (isTyping(e.target) || inMenu(e.target) || e.defaultPrevented) return
       if (e.key === "ArrowLeft") onStep(-1)
       if (e.key === "ArrowRight") onStep(1)
     }

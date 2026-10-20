@@ -15,7 +15,8 @@ createRoot(document.getElementById("root")!).render(
       <MotionConfig reducedMotion="user">
         <TooltipProvider>
           <App />
-          <Toaster position="bottom-center" />
+          {/* On phones the opened view's Copy buttons sit at the bottom; keep toasts above them. */}
+          <Toaster position="bottom-center" mobileOffset={{ bottom: 88 }} />
         </TooltipProvider>
       </MotionConfig>
     </ThemeProvider>

@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { cn } from "cn"
 
+import { AppSwitcher } from "@/components/app-switcher"
 import { AddDialog } from "@/components/add-dialog"
 import {
   AppSidebar,
@@ -44,7 +45,7 @@ import {
 } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
-import { useCurrentApp } from "@/hooks/use-current-app"
+import { useCurrentApp, type AppName } from "@/hooks/use-current-app"
 import { useLibrary } from "@/hooks/use-library"
 import { looksLikeUrl, useSaver } from "@/hooks/use-saver"
 import { allTagsOf, GALLERY, hostOf, type Item, type Kind } from "@/lib/api"
@@ -284,6 +285,13 @@ export function App() {
       : view.kind === "untagged"
         ? "Untagged"
         : `#${view.name}`
+  const switchApp = (next: AppName) => {
+    if (next === app) return
+    setApp(next)
+    setView({ kind: "all" })
+    setQuery("")
+    window.scrollTo({ top: 0 })
+  }
   const resetKey = `${heading}|${type}|${query}`
   const filtering = type !== "all" || query.trim() !== ""
   const filteringComponents = query.trim() !== ""
@@ -303,13 +311,7 @@ export function App() {
             untagged={sidebarUntagged}
             view={view}
             publish={publish}
-            onApp={(next) => {
-              if (next === app) return
-              setApp(next)
-              setView({ kind: "all" })
-              setQuery("")
-              window.scrollTo({ top: 0 })
-            }}
+            onApp={switchApp}
             onPublish={() => void publishNow()}
             onSetPassword={setEditingPassword}
             onView={(next) => {
@@ -320,6 +322,18 @@ export function App() {
 
           <main className="flex min-w-0 flex-1 flex-col">
             <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-transparent bg-background/80 px-4 py-3 backdrop-blur-xl md:px-8">
+              {/* The sidebar (and its switcher) is hidden on phones. */}
+              <div className="md:hidden">
+                <AppSwitcher
+                  compact
+                  app={app}
+                  counts={{
+                    inspo: items.length,
+                    components: componentLibrary.length,
+                  }}
+                  onChange={switchApp}
+                />
+              </div>
               <InputGroup className="h-9 max-w-md rounded-full bg-muted/60 shadow-none">
                 <InputGroupAddon>
                   <SearchIcon />
@@ -331,7 +345,11 @@ export function App() {
                   onKeyDown={(e) =>
                     e.key === "Escape" && (setQuery(""), e.currentTarget.blur())
                   }
-                  placeholder="Search titles, tags, colours, text…"
+                  placeholder={
+                    inComponents
+                      ? "Search components…"
+                      : "Search titles, tags, colours, text…"
+                  }
                 />
                 <InputGroupAddon align="inline-end">
                   <Kbd>/</Kbd>
