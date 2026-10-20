@@ -1,4 +1,5 @@
-import { countTags, type TagCount, type View } from "@/components/app-sidebar"
+import type { View } from "@/components/app-sidebar"
+import { countTags, type TagCount } from "@/lib/tags"
 import type { LibraryEntry } from "./index"
 
 /** Components in the chosen tag view whose title, description or tags contain every word typed. */

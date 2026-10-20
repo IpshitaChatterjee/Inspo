@@ -12,13 +12,7 @@ import { cn } from "cn"
 
 import { AppSwitcher } from "@/components/app-switcher"
 import { AddDialog } from "@/components/add-dialog"
-import {
-  AppSidebar,
-  countTags,
-  isUntagged,
-  type TagCount,
-  type View,
-} from "@/components/app-sidebar"
+import { AppSidebar, isUntagged, type View } from "@/components/app-sidebar"
 import { DropOverlay } from "@/components/drop-overlay"
 import { EditLock } from "@/components/edit-lock"
 import { ComponentDetail } from "@/components/component-detail"
@@ -28,6 +22,7 @@ import { HowToSave } from "@/components/how-to-save"
 import { InspoDetail } from "@/components/inspo-detail"
 import { MasonryGrid } from "@/components/masonry-grid"
 import { MobileTags } from "@/components/mobile-tags"
+import { countTags, type TagCount } from "@/lib/tags"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import {

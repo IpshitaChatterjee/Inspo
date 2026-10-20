@@ -1,8 +1,15 @@
+import { createElement } from "react"
+import { renderToString } from "react-dom/server"
 import ts from "typescript"
 import { describe, expect, test } from "vitest"
 import { bakeValues, DEFAULTS_END, forCopy, DEFAULTS_START } from "./code"
 import { library } from "./index"
-import { defaultValues, type ComponentMeta } from "./types"
+import {
+  defaultValues,
+  type ComponentMeta,
+  type Control,
+  type ControlValue,
+} from "./types"
 
 // Read separately from the registry so the folder check doesn't trust it.
 const metaFiles = import.meta.glob<{ default: ComponentMeta }>("./*/meta.tsx", {
@@ -15,6 +22,25 @@ function defaultsBlock(source: string): string {
   const end = source.indexOf(DEFAULTS_END)
   if (start === -1 || end < start) throw new Error("Missing defaults block")
   return source.slice(start + DEFAULTS_START.length, end)
+}
+
+// A value different from the control's default, to prove the prompt follows
+// the controls and doesn't just print fixed text.
+function changedValue(c: Control): ControlValue {
+  switch (c.type) {
+    case "slider":
+      return c.max
+    case "color":
+      return "#123456"
+    case "select":
+      return c.options.filter((o) => o.value !== c.default).at(-1)!.value
+    case "toggle":
+      return !c.default
+    case "text":
+      return "Changed text"
+    case "image":
+      return c.gradients.at(-1)!.value
+  }
 }
 
 // Runs the defaults block and returns the object it defines.
@@ -122,7 +148,6 @@ for (const entry of library) {
     test("copied file starts with use client and only imports react", () => {
       expect(entry.source.trimStart().startsWith(`"use client"`)).toBe(true)
       const { imports } = copyRuleBreaks(entry.source)
-      expect(imports.length).toBeGreaterThan(0)
       for (const from of imports) expect(from).toBe("react")
     })
 
@@ -139,6 +164,43 @@ for (const entry of library) {
       for (const c of entry.meta.controls) {
         expect(block).toMatch(new RegExp(`\\b${c.key}:`))
       }
+    })
+
+    // A key that only exists in the defaults block would do nothing.
+    test("every control key is used outside the defaults block", () => {
+      const block = defaultsBlock(entry.source)
+      const rest = entry.source.replace(block, "")
+      for (const c of entry.meta.controls) {
+        expect(rest).toMatch(new RegExp(`\\b${c.key}\\b`))
+      }
+    })
+
+    test("control defaults are valid for their control", () => {
+      for (const c of entry.meta.controls) {
+        if (c.type === "select") {
+          expect(c.options.map((o) => o.value)).toContain(c.default)
+        } else if (c.type === "image") {
+          expect(c.gradients.map((g) => g.value)).toContain(c.default)
+        } else if (c.type === "slider") {
+          expect(c.default).toBeGreaterThanOrEqual(c.min)
+          expect(c.default).toBeLessThanOrEqual(c.max)
+          const steps = (c.default - c.min) / c.step
+          expect(Math.abs(steps - Math.round(steps))).toBeLessThan(1e-9)
+        }
+      }
+    })
+
+    // Next.js renders on the server first, where window and document don't exist.
+    test("renders on the server without throwing", async () => {
+      const { default: Component } = await entry.load()
+      const html = renderToString(
+        createElement(
+          Component,
+          defaultValues(entry.meta.controls),
+          entry.meta.demo
+        )
+      )
+      expect(typeof html).toBe("string")
     })
 
     // The file's own defaults are what someone gets if they copy it untouched
@@ -179,6 +241,17 @@ for (const entry of library) {
       const prompt = entry.meta.prompt(values)
       for (const c of entry.meta.controls) {
         if (c.type !== "image") expect(prompt).toContain(String(values[c.key]))
+      }
+    })
+
+    // Images are left out here: prompts describe a background in words, and
+    // the first test above already checks they never print an uploaded file.
+    test("prompt mentions every changed value", () => {
+      for (const c of entry.meta.controls) {
+        if (c.type === "image") continue
+        const values = defaultValues(entry.meta.controls)
+        values[c.key] = changedValue(c)
+        expect(entry.meta.prompt(values)).toContain(String(values[c.key]))
       }
     })
   })

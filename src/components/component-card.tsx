@@ -78,6 +78,9 @@ export function ComponentCard({
         {onScreen && Loaded && (
           <div
             aria-hidden
+            // Nothing inside the preview can be focused or clicked, so a
+            // component with its own buttons never nests controls in the card.
+            inert
             className="pointer-events-none absolute top-0 left-0 origin-top-left"
             style={{
               width: `${PREVIEW_SCALE * 100}%`,

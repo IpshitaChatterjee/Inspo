@@ -14,6 +14,11 @@ function isTyping(target: EventTarget | null) {
   )
 }
 
+// Arrow keys belong to a focused dropdown button too (a Select trigger).
+function onSelectTrigger(target: EventTarget | null) {
+  return target instanceof HTMLElement && !!target.closest('[role="combobox"]')
+}
+
 // Arrow keys belong to an open dropdown, not to the item behind it.
 function inMenu(target: EventTarget | null) {
   return (
@@ -48,7 +53,13 @@ export function DetailShell({
         if (isTyping(e.target)) (e.target as HTMLElement).blur()
         else onClose()
       }
-      if (isTyping(e.target) || inMenu(e.target) || e.defaultPrevented) return
+      if (
+        isTyping(e.target) ||
+        inMenu(e.target) ||
+        onSelectTrigger(e.target) ||
+        e.defaultPrevented
+      )
+        return
       if (e.key === "ArrowLeft") onStep(-1)
       if (e.key === "ArrowRight") onStep(1)
     }

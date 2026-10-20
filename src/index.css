@@ -6,6 +6,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* How far toasts sit above the bottom edge: clear of the sticky Copy footer
+   that the opened view shows below 768px. */
+:root {
+    --toast-bottom: 24px;
+}
+@media (max-width: 767px) {
+    :root {
+        --toast-bottom: 88px;
+    }
+}
+
 :root {
     --background: oklch(1 0 0);
     --foreground: oklch(0.153 0.006 107.1);

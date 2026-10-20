@@ -2,7 +2,8 @@ import { motion } from "motion/react"
 import { SparklesIcon } from "lucide-react"
 import { cn } from "cn"
 
-import type { TagCount, View } from "@/components/app-sidebar"
+import type { View } from "@/components/app-sidebar"
+import type { TagCount } from "@/lib/tags"
 
 /** On phones the sidebar is hidden, so tags become a row you swipe through. */
 export function MobileTags({

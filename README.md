@@ -40,6 +40,8 @@ you made. Switch between the two from the wordmark at the top of the sidebar (on
 at the left of the top bar). Open one to play with its controls, then press **Copy prompt** (a description
 you can paste into any AI chat) or **Copy code** (the finished file, with your current settings built in).
 Components also show up in the shared gallery, where they can be tweaked and copied without any password.
+New or changed components reach the shared gallery automatically, within the usual delay after the app
+restarts, or right away with the refresh button under Shared gallery in Inspo.
 
 **Making a new one:** ask Claude in a chat to build it into `src/library/<slug>/`. Each component is one folder:
 

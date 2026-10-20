@@ -200,6 +200,9 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 await ensureFolders()
 await loadPublishState()
+// Component changes arrive as code changes and an app restart; check on start.
+// An unchanged gallery is skipped by the publish fingerprint.
+schedulePublish()
 await scan()
 watch()
 // Keep the published gallery in step with the library.
