@@ -18,7 +18,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { AppSwitcher } from "@/components/app-switcher"
 import { GalleryStatus } from "@/components/gallery-status"
+import type { AppName } from "@/hooks/use-current-app"
 import {
   allTagsOf,
   api,
@@ -34,9 +36,14 @@ export type View =
 export const isUntagged = (item: Item) => allTagsOf(item).length === 0
 
 type AppSidebarProps = {
-  items: Item[]
+  app: AppName
+  counts: Record<AppName, number>
+  tags: TagCount[]
+  total: number
+  untagged: number
   view: View
   publish: PublishState | null
+  onApp: (app: AppName) => void
   onView: (view: View) => void
   onPublish: () => void
   onSetPassword: (password: string | null) => Promise<void>
@@ -45,7 +52,9 @@ type AppSidebarProps = {
 export type TagCount = { name: string; count: number; mine: boolean }
 
 /** Every tag with how many items carry it: your own tags first, then auto ones, busiest first. */
-export function countTags(items: Item[]): TagCount[] {
+export function countTags(
+  items: Pick<Item, "tags" | "autoTags">[]
+): TagCount[] {
   const counts = new Map<string, TagCount>()
   for (const item of items) {
     for (const tag of allTagsOf(item)) {
@@ -66,21 +75,20 @@ export function countTags(items: Item[]): TagCount[] {
 const TAG_PREVIEW = 30
 
 export function AppSidebar({
-  items,
+  app,
+  counts,
+  tags,
+  total,
+  untagged,
   view,
   publish,
+  onApp,
   onView,
   onPublish,
   onSetPassword,
 }: AppSidebarProps) {
   const [renaming, setRenaming] = React.useState<string | null>(null)
   const [showAll, setShowAll] = React.useState(false)
-
-  const tags = React.useMemo(() => countTags(items), [items])
-  const untaggedCount = React.useMemo(
-    () => items.filter(isUntagged).length,
-    [items]
-  )
 
   const isActive = (candidate: View) =>
     candidate.kind === view.kind &&
@@ -100,13 +108,8 @@ export function AppSidebar({
 
   return (
     <aside className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-      <div className="flex items-center gap-2 px-5 pt-5 pb-4">
-        <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <SparklesIcon className="size-4" />
-        </span>
-        <span className="font-heading text-lg font-semibold tracking-tight">
-          Inspo
-        </span>
+      <div className="px-5 pt-5 pb-4">
+        <AppSwitcher app={app} counts={counts} onChange={onApp} />
       </div>
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4">
@@ -114,16 +117,16 @@ export function AppSidebar({
           <NavRow
             icon={<LayersIcon />}
             label="Everything"
-            count={items.length}
+            count={total}
             active={isActive({ kind: "all" })}
             onClick={() => onView({ kind: "all" })}
           />
           {/* Only when there's something untagged (or you're looking at it). */}
-          {(untaggedCount > 0 || isActive({ kind: "untagged" })) && (
+          {(untagged > 0 || isActive({ kind: "untagged" })) && (
             <NavRow
               icon={<InboxIcon />}
               label="Untagged"
-              count={untaggedCount}
+              count={untagged}
               active={isActive({ kind: "untagged" })}
               onClick={() => onView({ kind: "untagged" })}
             />
@@ -157,7 +160,7 @@ export function AppSidebar({
                 active={isActive({ kind: "tag", name: tag.name })}
                 onClick={() => onView({ kind: "tag", name: tag.name })}
                 menu={
-                  GALLERY ? undefined : (
+                  GALLERY || app !== "inspo" ? undefined : (
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         render={
@@ -211,7 +214,7 @@ export function AppSidebar({
         </section>
       </nav>
 
-      {!GALLERY && (
+      {!GALLERY && app === "inspo" && (
         <div className="border-t border-sidebar-border p-3">
           <GalleryStatus state={publish} onPublish={onPublish} onSetPassword={onSetPassword} />
         </div>

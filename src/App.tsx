@@ -11,7 +11,13 @@ import {
 import { cn } from "cn"
 
 import { AddDialog } from "@/components/add-dialog"
-import { AppSidebar, isUntagged, type View } from "@/components/app-sidebar"
+import {
+  AppSidebar,
+  countTags,
+  isUntagged,
+  type TagCount,
+  type View,
+} from "@/components/app-sidebar"
 import { DropOverlay } from "@/components/drop-overlay"
 import { EditLock } from "@/components/edit-lock"
 import { CanEditContext } from "@/lib/gallery-edits"
@@ -36,9 +42,11 @@ import {
 } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
+import { useCurrentApp } from "@/hooks/use-current-app"
 import { useLibrary } from "@/hooks/use-library"
 import { looksLikeUrl, useSaver } from "@/hooks/use-saver"
 import { allTagsOf, GALLERY, hostOf, type Item, type Kind } from "@/lib/api"
+import { library as componentLibrary } from "@/library"
 
 type TypeFilter = "all" | Exclude<Kind, "link">
 
@@ -120,6 +128,7 @@ export function App() {
     lockEditing,
     setEditingPassword,
   } = useLibrary()
+  const [app, setApp] = useCurrentApp()
   const [view, setView] = React.useState<View>({ kind: "all" })
   const [type, setType] = React.useState<TypeFilter>("all")
   const [query, setQuery] = React.useState("")
@@ -139,6 +148,28 @@ export function App() {
     () => [...new Set(items.flatMap(allTagsOf))].sort(),
     [items]
   )
+
+  // The sidebar and phone chips are shared, so each app hands them its own tags.
+  const componentTags = React.useMemo<TagCount[]>(
+    () =>
+      countTags(
+        componentLibrary.map((entry) => ({
+          tags: entry.meta.tags,
+          autoTags: [],
+        }))
+      ),
+    []
+  )
+  const inspoTags = React.useMemo(() => countTags(items), [items])
+  const inspoUntagged = React.useMemo(
+    () => items.filter(isUntagged).length,
+    [items]
+  )
+  const inComponents = app === "components"
+  const sidebarTags = inComponents ? componentTags : inspoTags
+  const sidebarUntagged = inComponents
+    ? componentLibrary.filter((entry) => entry.meta.tags.length === 0).length
+    : inspoUntagged
 
   const visible = React.useMemo(
     () =>
@@ -173,7 +204,7 @@ export function App() {
 
   // Paste an image or a link anywhere to save it.
   React.useEffect(() => {
-    if (GALLERY) return
+    if (GALLERY || inComponents) return
     const onPaste = (e: ClipboardEvent) => {
       if (isTyping(e.target)) return
       const files = [...(e.clipboardData?.files ?? [])]
@@ -190,7 +221,7 @@ export function App() {
     }
     window.addEventListener("paste", onPaste)
     return () => window.removeEventListener("paste", onPaste)
-  }, [saveFiles, saveLink])
+  }, [saveFiles, saveLink, inComponents])
 
   // "/" or ⌘K jumps to search.
   React.useEffect(() => {
@@ -221,7 +252,9 @@ export function App() {
 
   const heading =
     view.kind === "all"
-      ? "Everything"
+      ? inComponents
+        ? "Components"
+        : "Everything"
       : view.kind === "untagged"
         ? "Untagged"
         : `#${view.name}`
@@ -233,9 +266,23 @@ export function App() {
       <LayoutGroup>
         <div className="flex min-h-svh bg-background">
           <AppSidebar
-            items={items}
+            app={app}
+            counts={{
+              inspo: items.length,
+              components: componentLibrary.length,
+            }}
+            tags={sidebarTags}
+            total={inComponents ? componentLibrary.length : items.length}
+            untagged={sidebarUntagged}
             view={view}
             publish={publish}
+            onApp={(next) => {
+              if (next === app) return
+              setApp(next)
+              setView({ kind: "all" })
+              setQuery("")
+              window.scrollTo({ top: 0 })
+            }}
             onPublish={() => void publishNow()}
             onSetPassword={setEditingPassword}
             onView={(next) => {
@@ -264,7 +311,7 @@ export function App() {
                 </InputGroupAddon>
               </InputGroup>
 
-              <TypeSwitch value={type} onChange={setType} />
+              {!inComponents && <TypeSwitch value={type} onChange={setType} />}
 
               <div className="ml-auto flex items-center gap-1">
                 {GALLERY && (
@@ -275,7 +322,7 @@ export function App() {
                   />
                 )}
                 <ThemeToggle />
-                {!GALLERY && (
+                {!GALLERY && !inComponents && (
                   <Button
                     onClick={() => setAdding(true)}
                     className="rounded-full pr-3.5"
@@ -296,7 +343,8 @@ export function App() {
 
             <div className="flex flex-1 flex-col gap-5 px-4 pt-4 pb-16 md:px-8">
               <MobileTags
-                items={items}
+                tags={sidebarTags}
+                untagged={sidebarUntagged}
                 view={view}
                 onView={(next) => {
                   setView(next)
@@ -313,12 +361,24 @@ export function App() {
                   {heading}
                 </motion.h1>
                 <span className="text-sm text-muted-foreground tabular-nums">
-                  {visible.length}
-                  {filtering && ` of ${items.length}`}
+                  {inComponents ? componentLibrary.length : visible.length}
+                  {!inComponents && filtering && ` of ${items.length}`}
                 </span>
               </div>
 
-              {!library && !error ? (
+              {inComponents ? (
+                // Placeholder until the Components grid arrives.
+                <Empty className="flex-1">
+                  <EmptyHeader>
+                    <EmptyTitle className="font-heading">
+                      Nothing here yet
+                    </EmptyTitle>
+                    <EmptyDescription>
+                      Your components will show up here.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : !library && !error ? (
                 <div className="flex flex-1 items-center justify-center">
                   <Spinner className="size-6 text-muted-foreground" />
                 </div>
@@ -360,7 +420,7 @@ export function App() {
           )}
         </AnimatePresence>
 
-        {!GALLERY && (
+        {!GALLERY && !inComponents && (
           <>
             <AddDialog
               open={adding}

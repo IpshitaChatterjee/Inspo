@@ -1,25 +1,24 @@
-import * as React from "react"
 import { motion } from "motion/react"
 import { SparklesIcon } from "lucide-react"
 import { cn } from "cn"
 
-import { countTags, isUntagged, type View } from "@/components/app-sidebar"
-import type { Item } from "@/lib/api"
+import type { TagCount, View } from "@/components/app-sidebar"
 
 /** On phones the sidebar is hidden, so tags become a row you swipe through. */
 export function MobileTags({
-  items,
+  tags,
+  untagged,
   view,
   onView,
 }: {
-  items: Item[]
+  tags: TagCount[]
+  untagged: number
   view: View
   onView: (view: View) => void
 }) {
-  const tags = React.useMemo(() => countTags(items), [items])
   const chips: { view: View; label: string; auto?: boolean }[] = [
     { view: { kind: "all" }, label: "Everything" },
-    ...(items.some(isUntagged)
+    ...(untagged > 0
       ? [{ view: { kind: "untagged" } as View, label: "Untagged" }]
       : []),
     ...tags.map((tag) => ({

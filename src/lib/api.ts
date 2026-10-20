@@ -60,7 +60,7 @@ export type Library = {
 export type Patch = Partial<Pick<Item, "tags" | "autoTags" | "note" | "title">>
 
 /** Your tags first, then auto tags you haven't already added yourself. */
-export function allTagsOf(item: Item) {
+export function allTagsOf(item: Pick<Item, "tags" | "autoTags">) {
   return [...item.tags, ...item.autoTags.filter((tag) => !item.tags.includes(tag))]
 }
 
