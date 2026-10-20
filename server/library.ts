@@ -64,6 +64,8 @@ export type Item = {
   colors: string[]
   palette: string[]
   version: number
+  /** Only in the published gallery: where its files are. */
+  media?: { thumb: string; full: string | null }
 }
 
 type FileEntry = {
@@ -398,7 +400,7 @@ export async function reveal(id: string) {
 
 const analyzeQueue = limiter(2)
 // Bump when analysis learns something new, so older items get looked at again.
-const ANALYSIS_VERSION = 8
+const ANALYSIS_VERSION = 9
 let analyzing = false
 
 /** Tags every file that hasn't been looked at yet, a couple at a time. */

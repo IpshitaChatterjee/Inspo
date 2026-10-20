@@ -1,5 +1,8 @@
 export type Kind = "image" | "video" | "link"
 
+/** The published, read-only copy: browse and search only, data comes from files. */
+export const GALLERY = import.meta.env.MODE === "gallery"
+
 export type Item = {
   id: string
   kind: Kind
@@ -23,6 +26,17 @@ export type Item = {
   /** One swatch per colour, as hex. */
   palette: string[]
   version: number
+  /** Only in the published gallery: where its files are. */
+  media?: { thumb: string; full: string | null }
+}
+
+export type PublishState = {
+  status: "idle" | "publishing" | "error"
+  url?: string
+  publishedAt?: string
+  items?: number
+  error?: string
+  pending?: boolean
 }
 
 export type Library = {
@@ -38,7 +52,13 @@ export function allTagsOf(item: Item) {
 }
 
 export function mediaUrl(item: Item, size: "thumb" | "large" | "orig") {
+  if (item.media) return `/m/${size === "thumb" ? item.media.thumb : (item.media.full ?? item.media.thumb)}`
   return `/api/media?id=${encodeURIComponent(item.id)}&size=${size}&v=${item.version}`
+}
+
+/** Whether a video can actually play (a too-long one may be published as a still). */
+export function hasPlayableVideo(item: Item) {
+  return item.kind === "video" && (!item.media || !!item.media.full)
 }
 
 export function hostOf(url: string | null) {
@@ -64,7 +84,7 @@ const json = (method: string, body: unknown): RequestInit => ({
 })
 
 export const api = {
-  library: () => request<Library>("/api/items"),
+  library: () => (GALLERY ? request<Library>("/data.json", { cache: "no-cache" }) : request<Library>("/api/items")),
   update: (id: string, patch: Patch) => request("/api/items", json("PATCH", { id, ...patch })),
   remove: (id: string) =>
     request<{ undoId: string }>(`/api/items?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
@@ -81,4 +101,6 @@ export const api = {
   },
   renameTag: (from: string, to: string | null) => request("/api/tags", json("PATCH", { from, to })),
   reveal: (id?: string) => request("/api/reveal", json("POST", { id })),
+  publishState: () => request<PublishState>("/api/publish"),
+  publish: () => request<PublishState>("/api/publish", { method: "POST" }),
 }

@@ -81,7 +81,9 @@ function headline(lines: Line[]) {
   title = shorten(title.replace(/^[^\p{L}\p{N}]+/u, ""))
   // Misread text tends to be short and full of symbols; better no title than a garbled one.
   const letters = title.match(/\p{L}/gu)?.length ?? 0
-  return title.length >= 3 && letters / title.length > 0.6 ? title : null
+  // A scrap like "ion" isn't a title: ask for two words, or one long one.
+  const meaningful = title.split(/\s+/).length >= 2 || title.length >= 6
+  return meaningful && letters / title.length > 0.6 ? title : null
 }
 
 // The first real line of a caption: no author, links or emoji, and skipping

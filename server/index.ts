@@ -22,6 +22,7 @@ import {
   watch,
 } from "./library.ts"
 import { mediaFile, type Size } from "./media.ts"
+import { loadPublishState, publishEvents, publishNow, publishState, schedulePublish } from "./publish.ts"
 import { errorMessage, hash } from "./util.ts"
 
 const app = express()
@@ -115,6 +116,19 @@ app.get(
   })
 )
 
+app.get("/api/publish", (_req, res) => {
+  res.json(publishState())
+})
+
+app.post(
+  "/api/publish",
+  route(async (_req, res) => {
+    // Answer straight away; progress arrives over /api/events.
+    void publishNow()
+    res.json({ ...publishState(), status: "publishing" })
+  })
+)
+
 // Live updates: the page refreshes when the folder changes.
 app.get("/api/events", (req, res) => {
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" })
@@ -122,10 +136,13 @@ app.get("/api/events", (req, res) => {
   const send = (payload: object) => res.write(`data: ${JSON.stringify(payload)}\n\n`)
   const onChanged = () => send({ type: "changed" })
   const onToast = (toast: { message: string }) => send({ type: "toast", ...toast })
+  const onPublish = (publish: object) => send({ type: "publish", publish })
   const heartbeat = setInterval(() => res.write(": ping\n\n"), 25_000)
   events.on("changed", onChanged)
   events.on("toast", onToast)
+  publishEvents.on("change", onPublish)
   req.on("close", () => {
+    publishEvents.off("change", onPublish)
     clearInterval(heartbeat)
     events.off("changed", onChanged)
     events.off("toast", onToast)
@@ -146,8 +163,11 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 })
 
 await ensureFolders()
+await loadPublishState()
 await scan()
 watch()
+// Keep the published gallery in step with the library.
+events.on("changed", schedulePublish)
 
 // Only this Mac can open the app; nothing is exposed to the network.
 app.listen(PORT, "127.0.0.1", () => {

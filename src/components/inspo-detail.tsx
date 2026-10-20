@@ -4,6 +4,7 @@ import {
   ArrowUpRightIcon,
   CheckIcon,
   ChevronLeftIcon,
+  SparklesIcon,
   ChevronRightIcon,
   FolderOpenIcon,
   GlobeIcon,
@@ -16,8 +17,21 @@ import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { api, hostOf, mediaUrl, type Item, type Patch } from "@/lib/api"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  allTagsOf,
+  api,
+  GALLERY,
+  hasPlayableVideo,
+  hostOf,
+  mediaUrl,
+  type Item,
+  type Patch,
+} from "@/lib/api"
 
 type InspoDetailProps = {
   item: Item
@@ -32,10 +46,21 @@ type InspoDetailProps = {
 const spring = { type: "spring", stiffness: 260, damping: 30 } as const
 
 function isTyping(target: EventTarget | null) {
-  return target instanceof HTMLElement && !!target.closest("input, textarea, [contenteditable='true']")
+  return (
+    target instanceof HTMLElement &&
+    !!target.closest("input, textarea, [contenteditable='true']")
+  )
 }
 
-export function InspoDetail({ item, morph, tags, onClose, onStep, onUpdate, onDelete }: InspoDetailProps) {
+export function InspoDetail({
+  item,
+  morph,
+  tags,
+  onClose,
+  onStep,
+  onUpdate,
+  onDelete,
+}: InspoDetailProps) {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -50,10 +75,20 @@ export function InspoDetail({ item, morph, tags, onClose, onStep, onUpdate, onDe
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose, onStep])
 
-  const ratio = item.width && item.height ? item.width / item.height : item.kind === "link" ? 1.25 : 0.8
+  const ratio =
+    item.width && item.height
+      ? item.width / item.height
+      : item.kind === "link"
+        ? 1.25
+        : 0.8
 
   return (
-    <div role="dialog" aria-modal aria-label={item.title ?? item.name} className="fixed inset-0 z-50">
+    <div
+      role="dialog"
+      aria-modal
+      aria-label={item.title ?? item.name}
+      className="fixed inset-0 z-50"
+    >
       <motion.div
         className="absolute inset-0 bg-background/85 backdrop-blur-2xl"
         initial={{ opacity: 0 }}
@@ -63,8 +98,22 @@ export function InspoDetail({ item, morph, tags, onClose, onStep, onUpdate, onDe
         onClick={onClose}
       />
 
-      <div className="pointer-events-none relative flex h-full">
-        <div className="flex min-w-0 flex-1 items-center justify-center p-6 md:p-12">
+      {/* Phones: image on top, details underneath, all scrolling together.
+          Wider screens: image beside a fixed details panel. */}
+      <div className="relative flex h-full flex-col overflow-y-auto md:pointer-events-none md:flex-row md:overflow-hidden">
+        <Button
+          variant="secondary"
+          size="icon-sm"
+          aria-label="Close"
+          onClick={onClose}
+          className="fixed top-3 right-3 z-10 rounded-full shadow-md md:hidden"
+        >
+          <XIcon />
+        </Button>
+        <div
+          className="flex min-w-0 shrink-0 items-center justify-center px-4 pt-14 pb-4 md:flex-1 md:p-12"
+          onClick={(e) => e.target === e.currentTarget && onClose()}
+        >
           <motion.div
             key={item.id}
             layoutId={morph ? `media-${item.id}` : undefined}
@@ -72,11 +121,13 @@ export function InspoDetail({ item, morph, tags, onClose, onStep, onUpdate, onDe
             animate={{ opacity: 1, scale: 1 }}
             exit={morph ? undefined : { opacity: 0, scale: 0.96 }}
             transition={spring}
-            style={{
-              aspectRatio: String(ratio),
-              width: `min(100%, calc((100svh - 6rem) * ${ratio}))`,
-            }}
-            className="pointer-events-auto relative overflow-hidden rounded-2xl bg-muted shadow-2xl ring-1 ring-foreground/10"
+            style={
+              {
+                aspectRatio: String(ratio),
+                "--ratio": ratio,
+              } as React.CSSProperties
+            }
+            className="pointer-events-auto relative w-[min(100%,calc(60svh*var(--ratio)))] overflow-hidden rounded-2xl bg-muted shadow-2xl ring-1 ring-foreground/10 md:w-[min(100%,calc((100svh-6rem)*var(--ratio)))]"
           >
             <DetailMedia item={item} />
           </motion.div>
@@ -87,7 +138,7 @@ export function InspoDetail({ item, morph, tags, onClose, onStep, onUpdate, onDe
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 48, opacity: 0 }}
           transition={{ ...spring, delay: 0.04 }}
-          className="pointer-events-auto flex h-full w-[380px] shrink-0 flex-col border-l border-border bg-background/90 backdrop-blur-xl"
+          className="pointer-events-auto flex w-full shrink-0 flex-col border-t border-border bg-background/90 backdrop-blur-xl md:h-full md:w-[380px] md:border-t-0 md:border-l"
         >
           <DetailPanel
             key={item.id}
@@ -107,7 +158,7 @@ export function InspoDetail({ item, morph, tags, onClose, onStep, onUpdate, onDe
 function DetailMedia({ item }: { item: Item }) {
   const [largeReady, setLargeReady] = React.useState(false)
 
-  if (item.kind === "video") {
+  if (item.kind === "video" && hasPlayableVideo(item)) {
     return (
       <video
         src={mediaUrl(item, "orig")}
@@ -135,7 +186,9 @@ function DetailMedia({ item }: { item: Item }) {
             {item.title ?? host}
           </span>
           {item.description && (
-            <span className="line-clamp-6 text-base leading-relaxed text-muted-foreground">{item.description}</span>
+            <span className="line-clamp-6 text-base leading-relaxed text-muted-foreground">
+              {item.description}
+            </span>
           )}
         </div>
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -149,7 +202,12 @@ function DetailMedia({ item }: { item: Item }) {
 
   return (
     <>
-      <img src={mediaUrl(item, "thumb")} alt="" draggable={false} className="absolute inset-0 size-full object-contain" />
+      <img
+        src={mediaUrl(item, "thumb")}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 size-full object-contain"
+      />
       <img
         src={mediaUrl(item, "large")}
         alt={item.title ?? item.name}
@@ -163,13 +221,21 @@ function DetailMedia({ item }: { item: Item }) {
 
 type DetailPanelProps = Omit<InspoDetailProps, "morph">
 
-function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: DetailPanelProps) {
+function DetailPanel({
+  item,
+  tags,
+  onClose,
+  onStep,
+  onUpdate,
+  onDelete,
+}: DetailPanelProps) {
   const [title, setTitle] = React.useState(item.title ?? "")
   const [note, setNote] = React.useState(item.note)
   const host = hostOf(item.source)
 
   const saveTitle = () => {
-    if (title.trim() !== (item.title ?? "")) onUpdate(item.id, { title: title.trim() || null })
+    if (title.trim() !== (item.title ?? ""))
+      onUpdate(item.id, { title: title.trim() || null })
   }
   const saveNote = () => {
     if (note !== item.note) onUpdate(item.id, { note })
@@ -185,10 +251,20 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
     <>
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" aria-label="Previous" onClick={() => onStep(-1)}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Previous"
+            onClick={() => onStep(-1)}
+          >
             <ChevronLeftIcon />
           </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Next" onClick={() => onStep(1)}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Next"
+            onClick={() => onStep(1)}
+          >
             <ChevronRightIcon />
           </Button>
           <span className="ml-1 hidden items-center gap-1 text-xs text-muted-foreground lg:flex">
@@ -196,27 +272,42 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
             <Kbd>→</Kbd>
           </span>
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}>
+        {/* Phones have a floating close button instead. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close"
+          onClick={onClose}
+          className="hidden md:inline-flex"
+        >
           <XIcon />
         </Button>
       </div>
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 pt-2 pb-6">
         <div className="flex flex-col gap-2">
-          <textarea
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault()
-                e.currentTarget.blur()
-              }
-            }}
-            rows={1}
-            placeholder="Untitled"
-            className="field-sizing-content resize-none bg-transparent font-heading text-xl leading-snug font-medium outline-none placeholder:text-muted-foreground/60"
-          />
+          {GALLERY ? (
+            item.title && (
+              <h2 className="font-heading text-xl leading-snug font-medium">
+                {item.title}
+              </h2>
+            )
+          ) : (
+            <textarea
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  e.currentTarget.blur()
+                }
+              }}
+              rows={1}
+              placeholder="Untitled"
+              className="field-sizing-content resize-none bg-transparent font-heading text-xl leading-snug font-medium outline-none placeholder:text-muted-foreground/60"
+            />
+          )}
           {item.source && (
             <a
               href={item.source}
@@ -231,15 +322,45 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
           )}
         </div>
 
-        <Field label="Tags">
-          <TagInput
-            value={item.tags}
-            autoValue={item.autoTags.filter((tag) => !item.tags.includes(tag))}
-            suggestions={tags}
-            onChange={(next) => onUpdate(item.id, { tags: next })}
-            onRemoveAuto={(tag) => onUpdate(item.id, { autoTags: item.autoTags.filter((t) => t !== tag) })}
-          />
-        </Field>
+        {GALLERY ? (
+          allTagsOf(item).length > 0 && (
+            <Field label="Tags">
+              <div className="flex flex-wrap gap-1.5">
+                {allTagsOf(item).map((tag) => (
+                  <span
+                    key={tag}
+                    className={
+                      item.tags.includes(tag)
+                        ? "inline-flex h-6 items-center rounded-full bg-secondary px-2.5 text-xs font-medium text-secondary-foreground"
+                        : "inline-flex h-6 items-center gap-1 rounded-full border border-dashed border-border px-2 text-xs text-muted-foreground"
+                    }
+                  >
+                    {!item.tags.includes(tag) && (
+                      <SparklesIcon className="size-3" />
+                    )}
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </Field>
+          )
+        ) : (
+          <Field label="Tags">
+            <TagInput
+              value={item.tags}
+              autoValue={item.autoTags.filter(
+                (tag) => !item.tags.includes(tag)
+              )}
+              suggestions={tags}
+              onChange={(next) => onUpdate(item.id, { tags: next })}
+              onRemoveAuto={(tag) =>
+                onUpdate(item.id, {
+                  autoTags: item.autoTags.filter((t) => t !== tag),
+                })
+              }
+            />
+          </Field>
+        )}
 
         {item.palette.length > 0 && (
           <Field label="Colours">
@@ -251,22 +372,24 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
           </Field>
         )}
 
-        <Field label="Note">
-          <Textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            onBlur={saveNote}
-            placeholder="What caught your eye?"
-            className="min-h-24"
-          />
-        </Field>
+        {!GALLERY && (
+          <Field label="Note">
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onBlur={saveNote}
+              placeholder="What caught your eye?"
+              className="min-h-24"
+            />
+          </Field>
+        )}
 
         <Separator />
 
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
           <dt className="text-muted-foreground">Saved</dt>
           <dd>{added}</dd>
-          {item.kind !== "link" && (
+          {item.kind !== "link" && !GALLERY && (
             <>
               <dt className="text-muted-foreground">File</dt>
               <dd className="truncate" title={item.id}>
@@ -285,32 +408,56 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
         </dl>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-border px-4 py-3">
-        {item.kind !== "link" && (
-          <Button variant="ghost" size="sm" onClick={() => void api.reveal(item.id)}>
-            <FolderOpenIcon />
-            Show in Finder
+      {!GALLERY && (
+        <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+          {item.kind !== "link" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void api.reveal(item.id)}
+            >
+              <FolderOpenIcon />
+              Show in Finder
+            </Button>
+          )}
+          {/* No confirmation: files go to the Bin, so a slip is easy to undo. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={() => onDelete(item)}
+          >
+            <Trash2Icon />
+            Delete
           </Button>
-        )}
-        {/* No confirmation: files go to the Bin, so a slip is easy to undo. */}
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onDelete(item)}>
-          <Trash2Icon />
-          Delete
-        </Button>
-      </div>
+        </div>
+      )}
     </>
   )
 }
 
 // A colour from the image: hover shows its hex code, click copies it.
-function Swatch({ hex, name, index }: { hex: string; name?: string; index: number }) {
+function Swatch({
+  hex,
+  name,
+  index,
+}: {
+  hex: string
+  name?: string
+  index: number
+}) {
   const [copied, setCopied] = React.useState(false)
   const label = hex.toUpperCase()
   return (
     <motion.span
       initial={{ opacity: 0, scale: 0.6 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: "spring", stiffness: 400, damping: 24, delay: index * 0.04 }}
+      transition={{
+        type: "spring",
+        stiffness: 400,
+        damping: 24,
+        delay: index * 0.04,
+      }}
     >
       <Tooltip onOpenChange={(open) => !open && setCopied(false)}>
         <TooltipTrigger
@@ -343,7 +490,13 @@ function Swatch({ hex, name, index }: { hex: string; name?: string; index: numbe
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>

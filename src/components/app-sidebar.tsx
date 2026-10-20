@@ -18,48 +18,74 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { allTagsOf, api, type Item } from "@/lib/api"
+import { GalleryStatus } from "@/components/gallery-status"
+import {
+  allTagsOf,
+  api,
+  GALLERY,
+  type Item,
+  type PublishState,
+} from "@/lib/api"
 
 export type View = { kind: "all" } | { kind: "tag"; name: string }
 
 type AppSidebarProps = {
   items: Item[]
   view: View
+  publish: PublishState | null
   onView: (view: View) => void
   onHelp: () => void
+  onPublish: () => void
 }
 
-type TagCount = { name: string; count: number; mine: boolean }
+export type TagCount = { name: string; count: number; mine: boolean }
+
+/** Every tag with how many items carry it: your own tags first, then auto ones, busiest first. */
+export function countTags(items: Item[]): TagCount[] {
+  const counts = new Map<string, TagCount>()
+  for (const item of items) {
+    for (const tag of allTagsOf(item)) {
+      const entry = counts.get(tag) ?? { name: tag, count: 0, mine: false }
+      entry.count++
+      if (item.tags.includes(tag)) entry.mine = true
+      counts.set(tag, entry)
+    }
+  }
+  return [...counts.values()].sort(
+    (a, b) =>
+      Number(b.mine) - Number(a.mine) ||
+      b.count - a.count ||
+      a.name.localeCompare(b.name)
+  )
+}
 
 const TAG_PREVIEW = 30
 
-export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
+export function AppSidebar({
+  items,
+  view,
+  publish,
+  onView,
+  onHelp,
+  onPublish,
+}: AppSidebarProps) {
   const [renaming, setRenaming] = React.useState<string | null>(null)
   const [showAll, setShowAll] = React.useState(false)
 
-  const tags = React.useMemo(() => {
-    const counts = new Map<string, TagCount>()
-    for (const item of items) {
-      for (const tag of allTagsOf(item)) {
-        const entry = counts.get(tag) ?? { name: tag, count: 0, mine: false }
-        entry.count++
-        if (item.tags.includes(tag)) entry.mine = true
-        counts.set(tag, entry)
-      }
-    }
-    // Your own tags first, then the automatic ones; busiest first within each.
-    return [...counts.values()].sort(
-      (a, b) => Number(b.mine) - Number(a.mine) || b.count - a.count || a.name.localeCompare(b.name)
-    )
-  }, [items])
+  const tags = React.useMemo(() => countTags(items), [items])
 
   const isActive = (candidate: View) =>
     candidate.kind === view.kind &&
-    (candidate.kind !== "tag" || (view.kind === "tag" && view.name === candidate.name))
+    (candidate.kind !== "tag" ||
+      (view.kind === "tag" && view.name === candidate.name))
 
   const visibleTags = showAll ? tags : tags.slice(0, TAG_PREVIEW)
   // Keep the selected tag visible even when it's past the preview cut-off.
-  if (!showAll && view.kind === "tag" && !visibleTags.some((t) => t.name === view.name)) {
+  if (
+    !showAll &&
+    view.kind === "tag" &&
+    !visibleTags.some((t) => t.name === view.name)
+  ) {
     const selected = tags.find((t) => t.name === view.name)
     if (selected) visibleTags.push(selected)
   }
@@ -70,7 +96,9 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
         <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <SparklesIcon className="size-4" />
         </span>
-        <span className="font-heading text-lg font-semibold tracking-tight">Inspo</span>
+        <span className="font-heading text-lg font-semibold tracking-tight">
+          Inspo
+        </span>
       </div>
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4">
@@ -83,7 +111,9 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
         />
 
         <section className="flex flex-col gap-0.5">
-          <span className="px-2 pb-1 text-xs font-medium text-muted-foreground">Tags</span>
+          <span className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+            Tags
+          </span>
           {visibleTags.map((tag) =>
             renaming === tag.name ? (
               <InlineName
@@ -93,7 +123,8 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
                   setRenaming(null)
                   if (!next || next === tag.name) return
                   await api.renameTag(tag.name, next)
-                  if (isActive({ kind: "tag", name: tag.name })) onView({ kind: "tag", name: next.toLowerCase() })
+                  if (isActive({ kind: "tag", name: tag.name }))
+                    onView({ kind: "tag", name: next.toLowerCase() })
                 }}
               />
             ) : (
@@ -106,42 +137,47 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
                 active={isActive({ kind: "tag", name: tag.name })}
                 onClick={() => onView({ kind: "tag", name: tag.name })}
                 menu={
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={`${tag.name} options`}
-                          className="opacity-0 group-hover/row:opacity-100 aria-expanded:opacity-100"
-                        />
-                      }
-                    >
-                      <MoreHorizontalIcon />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem onClick={() => setRenaming(tag.name)}>
-                        <PencilIcon />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={async () => {
-                          await api.renameTag(tag.name, null)
-                          if (isActive({ kind: "tag", name: tag.name })) onView({ kind: "all" })
-                        }}
+                  GALLERY ? undefined : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`${tag.name} options`}
+                            className="opacity-0 group-hover/row:opacity-100 aria-expanded:opacity-100"
+                          />
+                        }
                       >
-                        <Trash2Icon />
-                        Remove from everything
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <MoreHorizontalIcon />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem onClick={() => setRenaming(tag.name)}>
+                          <PencilIcon />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={async () => {
+                            await api.renameTag(tag.name, null)
+                            if (isActive({ kind: "tag", name: tag.name }))
+                              onView({ kind: "all" })
+                          }}
+                        >
+                          <Trash2Icon />
+                          Remove from everything
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )
                 }
               />
             )
           )}
           {!tags.length && (
-            <p className="px-2 py-1 text-sm text-muted-foreground">Tags you add show up here.</p>
+            <p className="px-2 py-1 text-sm text-muted-foreground">
+              Tags you add show up here.
+            </p>
           )}
           {tags.length > TAG_PREVIEW && (
             <button
@@ -155,16 +191,29 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
         </section>
       </nav>
 
-      <div className="flex flex-col gap-0.5 border-t border-sidebar-border p-3">
-        <Button variant="ghost" size="sm" className="justify-start" onClick={onHelp}>
-          <SparklesIcon />
-          How to save from anywhere
-        </Button>
-        <Button variant="ghost" size="sm" className="justify-start" onClick={() => void api.reveal()}>
-          <FolderOpenIcon />
-          Open folder in Finder
-        </Button>
-      </div>
+      {!GALLERY && (
+        <div className="flex flex-col gap-0.5 border-t border-sidebar-border p-3">
+          <GalleryStatus state={publish} onPublish={onPublish} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-1.5 justify-start"
+            onClick={onHelp}
+          >
+            <SparklesIcon />
+            How to save from anywhere
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="justify-start"
+            onClick={() => void api.reveal()}
+          >
+            <FolderOpenIcon />
+            Open folder in Finder
+          </Button>
+        </div>
+      )}
     </aside>
   )
 }
@@ -179,7 +228,15 @@ type NavRowProps = {
   menu?: React.ReactNode
 }
 
-function NavRow({ icon, label, count, active, muted, onClick, menu }: NavRowProps) {
+function NavRow({
+  icon,
+  label,
+  count,
+  active,
+  muted,
+  onClick,
+  menu,
+}: NavRowProps) {
   return (
     <div className="group/row relative flex items-center">
       {active && (
@@ -203,7 +260,12 @@ function NavRow({ icon, label, count, active, muted, onClick, menu }: NavRowProp
       >
         {icon}
         <span className="truncate">{label}</span>
-        <span className={cn("ml-auto text-xs tabular-nums text-muted-foreground", menu && "group-hover/row:opacity-0")}>
+        <span
+          className={cn(
+            "ml-auto text-xs text-muted-foreground tabular-nums",
+            menu && "group-hover/row:opacity-0"
+          )}
+        >
           {count}
         </span>
       </button>
@@ -212,7 +274,13 @@ function NavRow({ icon, label, count, active, muted, onClick, menu }: NavRowProp
   )
 }
 
-function InlineName({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
+function InlineName({
+  initial,
+  onDone,
+}: {
+  initial: string
+  onDone: (name: string | null) => void
+}) {
   const [value, setValue] = React.useState(initial)
   const done = React.useRef(false)
   const finish = (name: string | null) => {

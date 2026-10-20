@@ -3,7 +3,7 @@ import { motion } from "motion/react"
 import { GlobeIcon, PlayIcon } from "lucide-react"
 import { cn } from "cn"
 
-import { allTagsOf, hostOf, mediaUrl, type Item } from "@/lib/api"
+import { allTagsOf, hasPlayableVideo, hostOf, mediaUrl, type Item } from "@/lib/api"
 
 type InspoCardProps = {
   item: Item
@@ -42,7 +42,8 @@ export function InspoCard({ item, ratio, fresh, isOpen, delay, onOpen, onRatio }
           )}
         >
           {item.kind === "image" && <ImageFace item={item} onRatio={onRatio} />}
-          {item.kind === "video" && <VideoFace item={item} onRatio={onRatio} />}
+          {item.kind === "video" &&
+            (hasPlayableVideo(item) ? <VideoFace item={item} onRatio={onRatio} /> : <ImageFace item={item} onRatio={onRatio} />)}
           {item.kind === "link" && <LinkFace item={item} />}
 
           {item.kind === "video" && (

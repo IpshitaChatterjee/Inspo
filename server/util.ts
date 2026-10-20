@@ -3,10 +3,10 @@ import crypto from "node:crypto"
 import fsp from "node:fs/promises"
 import path from "node:path"
 
-export function run(cmd: string, args: string[], timeoutMs = 60_000) {
+export function run(cmd: string, args: string[], timeoutMs = 60_000, cwd?: string) {
   return new Promise<string>((resolve, reject) => {
-    execFile(cmd, args, { timeout: timeoutMs }, (error, stdout) => {
-      if (error) reject(error)
+    execFile(cmd, args, { timeout: timeoutMs, cwd, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) reject(Object.assign(error, { output: `${stdout}\n${stderr}` }))
       else resolve(stdout)
     })
   })

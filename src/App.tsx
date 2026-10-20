@@ -1,6 +1,13 @@
 import * as React from "react"
 import { AnimatePresence, LayoutGroup, motion } from "motion/react"
-import { ImagePlusIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, TriangleAlertIcon } from "lucide-react"
+import {
+  ImagePlusIcon,
+  MoonIcon,
+  PlusIcon,
+  SearchIcon,
+  SunIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
 import { cn } from "cn"
 
 import { AddDialog } from "@/components/add-dialog"
@@ -9,15 +16,27 @@ import { DropOverlay } from "@/components/drop-overlay"
 import { HowToSave } from "@/components/how-to-save"
 import { InspoDetail } from "@/components/inspo-detail"
 import { MasonryGrid } from "@/components/masonry-grid"
+import { MobileTags } from "@/components/mobile-tags"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { useLibrary } from "@/hooks/use-library"
 import { looksLikeUrl, useSaver } from "@/hooks/use-saver"
-import { allTagsOf, hostOf, type Item, type Kind } from "@/lib/api"
+import { allTagsOf, GALLERY, hostOf, type Item, type Kind } from "@/lib/api"
 
 type TypeFilter = "all" | Exclude<Kind, "link">
 
@@ -28,7 +47,10 @@ const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
 ]
 
 function isTyping(target: EventTarget | null) {
-  return target instanceof HTMLElement && !!target.closest("input, textarea, [contenteditable='true']")
+  return (
+    target instanceof HTMLElement &&
+    !!target.closest("input, textarea, [contenteditable='true']")
+  )
 }
 
 // Colour words people use, mapped to the names the Mac gives colours.
@@ -82,11 +104,14 @@ function matches(item: Item, query: string) {
 }
 
 export function App() {
-  const { library, error, fresh, update, remove } = useLibrary()
+  const { library, error, fresh, update, remove, publish, publishNow } =
+    useLibrary()
   const [view, setView] = React.useState<View>({ kind: "all" })
   const [type, setType] = React.useState<TypeFilter>("all")
   const [query, setQuery] = React.useState("")
-  const [open, setOpen] = React.useState<{ id: string; morph: boolean } | null>(null)
+  const [open, setOpen] = React.useState<{ id: string; morph: boolean } | null>(
+    null
+  )
   const [adding, setAdding] = React.useState(false)
   const [help, setHelp] = React.useState(false)
   const searchRef = React.useRef<HTMLInputElement>(null)
@@ -96,7 +121,10 @@ export function App() {
   const { saveFiles, saveLink } = useSaver(tag)
 
   const items = React.useMemo(() => library?.items ?? [], [library])
-  const allTags = React.useMemo(() => [...new Set(items.flatMap(allTagsOf))].sort(), [items])
+  const allTags = React.useMemo(
+    () => [...new Set(items.flatMap(allTagsOf))].sort(),
+    [items]
+  )
 
   const visible = React.useMemo(
     () =>
@@ -109,14 +137,15 @@ export function App() {
     [items, view, type, query]
   )
 
-  const openItem = open ? items.find((i) => i.id === open.id) ?? null : null
+  const openItem = open ? (items.find((i) => i.id === open.id) ?? null) : null
 
   const step = React.useCallback(
     (direction: -1 | 1) => {
       setOpen((current) => {
         if (!current || !visible.length) return current
         const index = visible.findIndex((i) => i.id === current.id)
-        const next = visible[(index + direction + visible.length) % visible.length]
+        const next =
+          visible[(index + direction + visible.length) % visible.length]
         return { id: next.id, morph: false }
       })
     },
@@ -127,6 +156,7 @@ export function App() {
 
   // Paste an image or a link anywhere to save it.
   React.useEffect(() => {
+    if (GALLERY) return
     const onPaste = (e: ClipboardEvent) => {
       if (isTyping(e.target)) return
       const files = [...(e.clipboardData?.files ?? [])]
@@ -149,7 +179,10 @@ export function App() {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (open) return
-      if ((e.key === "/" && !isTyping(e.target)) || (e.key === "k" && (e.metaKey || e.ctrlKey))) {
+      if (
+        (e.key === "/" && !isTyping(e.target)) ||
+        (e.key === "k" && (e.metaKey || e.ctrlKey))
+      ) {
         e.preventDefault()
         searchRef.current?.focus()
       }
@@ -161,7 +194,7 @@ export function App() {
   // The browser bookmark button opens the app with ?add=<page>.
   const handledAdd = React.useRef(false)
   React.useEffect(() => {
-    if (handledAdd.current) return
+    if (handledAdd.current || GALLERY) return
     handledAdd.current = true
     const url = new URLSearchParams(window.location.search).get("add")
     if (!url) return
@@ -179,6 +212,8 @@ export function App() {
         <AppSidebar
           items={items}
           view={view}
+          publish={publish}
+          onPublish={() => void publishNow()}
           onView={(next) => {
             setView(next)
             window.scrollTo({ top: 0 })
@@ -196,7 +231,9 @@ export function App() {
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Escape" && (setQuery(""), e.currentTarget.blur())}
+                onKeyDown={(e) =>
+                  e.key === "Escape" && (setQuery(""), e.currentTarget.blur())
+                }
                 placeholder="Search titles, tags, colours, text…"
               />
               <InputGroupAddon align="inline-end">
@@ -208,10 +245,15 @@ export function App() {
 
             <div className="ml-auto flex items-center gap-1">
               <ThemeToggle />
-              <Button onClick={() => setAdding(true)} className="rounded-full pr-3.5">
-                <PlusIcon />
-                Save
-              </Button>
+              {!GALLERY && (
+                <Button
+                  onClick={() => setAdding(true)}
+                  className="rounded-full pr-3.5"
+                >
+                  <PlusIcon />
+                  Save
+                </Button>
+              )}
             </div>
           </header>
 
@@ -223,6 +265,14 @@ export function App() {
           )}
 
           <div className="flex flex-1 flex-col gap-5 px-4 pt-4 pb-16 md:px-8">
+            <MobileTags
+              items={items}
+              view={view}
+              onView={(next) => {
+                setView(next)
+                window.scrollTo({ top: 0 })
+              }}
+            />
             <div className="flex items-baseline gap-3">
               <motion.h1
                 key={heading}
@@ -252,7 +302,7 @@ export function App() {
               />
             ) : (
               <EmptyState
-                filtering={filtering || view.kind !== "all"}
+                filtering={filtering || view.kind !== "all" || GALLERY}
                 onAdd={() => setAdding(true)}
                 onHelp={() => setHelp(true)}
               />
@@ -280,14 +330,34 @@ export function App() {
         )}
       </AnimatePresence>
 
-      <AddDialog open={adding} tag={tag} onOpenChange={setAdding} onLink={saveLink} onFiles={saveFiles} />
-      <HowToSave open={help} folder={library?.folder ?? ""} onOpenChange={setHelp} />
-      <DropOverlay tag={tag} onFiles={saveFiles} onLink={saveLink} />
+      {!GALLERY && (
+        <>
+          <AddDialog
+            open={adding}
+            tag={tag}
+            onOpenChange={setAdding}
+            onLink={saveLink}
+            onFiles={saveFiles}
+          />
+          <HowToSave
+            open={help}
+            folder={library?.folder ?? ""}
+            onOpenChange={setHelp}
+          />
+          <DropOverlay tag={tag} onFiles={saveFiles} onLink={saveLink} />
+        </>
+      )}
     </LayoutGroup>
   )
 }
 
-function TypeSwitch({ value, onChange }: { value: TypeFilter; onChange: (value: TypeFilter) => void }) {
+function TypeSwitch({
+  value,
+  onChange,
+}: {
+  value: TypeFilter
+  onChange: (value: TypeFilter) => void
+}) {
   return (
     <div className="hidden items-center rounded-full bg-muted/60 p-0.5 lg:flex">
       {TYPE_FILTERS.map((option) => (
@@ -297,7 +367,9 @@ function TypeSwitch({ value, onChange }: { value: TypeFilter; onChange: (value: 
           onClick={() => onChange(option.value)}
           className={cn(
             "relative h-8 rounded-full px-3.5 text-sm transition-colors",
-            value === option.value ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            value === option.value
+              ? "text-foreground"
+              : "text-muted-foreground hover:text-foreground"
           )}
         >
           {value === option.value && (
@@ -317,7 +389,9 @@ function TypeSwitch({ value, onChange }: { value: TypeFilter; onChange: (value: 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   const isDark =
-    theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    theme === "dark" ||
+    (theme === "system" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches)
   return (
     <Button
       variant="ghost"
@@ -341,13 +415,23 @@ function ThemeToggle() {
   )
 }
 
-function EmptyState({ filtering, onAdd, onHelp }: { filtering: boolean; onAdd: () => void; onHelp: () => void }) {
+function EmptyState({
+  filtering,
+  onAdd,
+  onHelp,
+}: {
+  filtering: boolean
+  onAdd: () => void
+  onHelp: () => void
+}) {
   if (filtering) {
     return (
       <Empty className="flex-1">
         <EmptyHeader>
           <EmptyTitle className="font-heading">Nothing here yet</EmptyTitle>
-          <EmptyDescription>Try another search or tag, or drop something in to fill it.</EmptyDescription>
+          <EmptyDescription>
+            Try another search or tag, or drop something in to fill it.
+          </EmptyDescription>
         </EmptyHeader>
       </Empty>
     )
@@ -358,10 +442,12 @@ function EmptyState({ filtering, onAdd, onHelp }: { filtering: boolean; onAdd: (
         <EmptyMedia variant="icon">
           <ImagePlusIcon />
         </EmptyMedia>
-        <EmptyTitle className="font-heading text-xl">Your inspiration lives here</EmptyTitle>
+        <EmptyTitle className="font-heading text-xl">
+          Your inspiration lives here
+        </EmptyTitle>
         <EmptyDescription>
-          Drop images or videos onto this window, paste a link with ⌘V, or save into the Inspo folder in iCloud
-          Drive from your iPhone.
+          Drop images or videos onto this window, paste a link with ⌘V, or save
+          into the Inspo folder in iCloud Drive from your iPhone.
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent className="flex-row justify-center">

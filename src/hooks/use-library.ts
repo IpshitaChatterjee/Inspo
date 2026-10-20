@@ -1,7 +1,7 @@
 import * as React from "react"
 import { toast } from "sonner"
 
-import { api, type Item, type Library, type Patch } from "@/lib/api"
+import { api, GALLERY, type Item, type Library, type Patch, type PublishState } from "@/lib/api"
 
 const FRESH_FOR_MS = 2600
 
@@ -11,6 +11,7 @@ export function useLibrary() {
   // Items that just arrived (from iCloud or a save) get a brief highlight.
   const [fresh, setFresh] = React.useState<Set<string>>(() => new Set())
   const known = React.useRef<Set<string> | null>(null)
+  const [publish, setPublish] = React.useState<PublishState | null>(null)
 
   const refresh = React.useCallback(async () => {
     try {
@@ -34,17 +35,21 @@ export function useLibrary() {
       setLibrary(next)
       setError(null)
     } catch {
-      setError("Can't reach the Inspo app on this Mac. Is it still running?")
+      setError(GALLERY ? "Couldn't load the gallery. Try refreshing." : "Can't reach the Inspo app on this Mac. Is it still running?")
     }
   }, [])
 
   React.useEffect(() => {
     void refresh()
+    // The published gallery is a fixed copy; there's nothing live to listen to.
+    if (GALLERY) return
+    void api.publishState().then(setPublish).catch(() => {})
     const events = new EventSource("/api/events")
     events.onmessage = (event) => {
-      const message = JSON.parse(event.data) as { type: string; message?: string }
+      const message = JSON.parse(event.data) as { type: string; message?: string; publish?: PublishState }
       if (message.type === "changed") void refresh()
       if (message.type === "toast" && message.message) toast.success(message.message)
+      if (message.type === "publish" && message.publish) setPublish(message.publish)
     }
     events.onopen = () => void refresh()
     return () => events.close()
@@ -96,5 +101,13 @@ export function useLibrary() {
     [refresh]
   )
 
-  return { library, error, fresh, refresh, update, remove }
+  const publishNow = React.useCallback(async () => {
+    try {
+      setPublish(await api.publish())
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }, [])
+
+  return { library, error, fresh, refresh, update, remove, publish, publishNow }
 }
