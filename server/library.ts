@@ -4,7 +4,7 @@ import fsp from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
-import { analyze, autoTitle } from "./analyze.ts"
+import { analyze, autoTitle, IGNORED_TAGS } from "./analyze.ts"
 import { captionTags } from "./caption-tags.ts"
 import { captureUrl, extractUrls, type Capture } from "./capture.ts"
 import { INBOX_DIR, INSPO_DIR, LIBRARY_FILE, TMP_DIR } from "./config.ts"
@@ -106,7 +106,8 @@ async function readLibrary() {
       items: parsed.items && typeof parsed.items === "object" ? parsed.items : {},
     }
     libraryReadable = true
-    if (mergeCategoriesIntoTags()) await saveLibrary()
+    const merged = mergeCategoriesIntoTags()
+    if (dropIgnoredAutoTags() || merged) await saveLibrary()
   } catch (error) {
     libraryReadable = false
     console.warn(`[library] ${LIBRARY_FILE} could not be read, not saving until it can: ${errorMessage(error)}`)
@@ -121,6 +122,19 @@ function mergeCategoriesIntoTags() {
     if (meta.category) meta.tags = cleanTags([...(meta.tags ?? []), meta.category])
     delete meta.category
     changed = true
+  }
+  return changed
+}
+
+// Clears auto tags that are now ignored, from items tagged before the rule.
+function dropIgnoredAutoTags() {
+  let changed = false
+  for (const meta of Object.values(library.items)) {
+    const kept = meta.autoTags?.filter((tag) => !IGNORED_TAGS.has(tag))
+    if (kept && kept.length !== meta.autoTags!.length) {
+      meta.autoTags = kept
+      changed = true
+    }
   }
   return changed
 }

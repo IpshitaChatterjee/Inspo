@@ -8,6 +8,9 @@ import { run } from "./util.ts"
 // Nothing is sent anywhere.
 
 const SCRIPT = path.join(import.meta.dirname, "vision.js")
+
+// Labels the Mac gives almost everything, so they say nothing. Never used as tags.
+export const IGNORED_TAGS = new Set(["document", "screenshot"])
 const MAX_TEXT = 1500
 
 export type Analysis = { tags: string[]; text: string; headline: string | null; colors: Colors }
@@ -27,7 +30,9 @@ export async function analyze(source: Source): Promise<Analysis> {
 
   const out = await run("osascript", ["-l", "JavaScript", SCRIPT, image], 60_000)
   const parsed = JSON.parse(out) as { labels: string[]; lines: Line[] }
-  const tags = parsed.labels.map((label) => label.replace(/_/g, " ").toLowerCase())
+  const tags = parsed.labels
+    .map((label) => label.replace(/_/g, " ").toLowerCase())
+    .filter((tag) => !IGNORED_TAGS.has(tag))
   return {
     tags,
     text: parsed.lines.map((line) => line.text).join("\n").slice(0, MAX_TEXT),
