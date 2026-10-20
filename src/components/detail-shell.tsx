@@ -143,14 +143,22 @@ export function DetailNav({
 
 export function Field({
   label,
+  action,
   children,
 }: {
   label: string
+  /** A small text button at the right of the label, e.g. Reset. */
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
+        {action}
+      </div>
       {children}
     </div>
   )

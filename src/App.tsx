@@ -20,6 +20,7 @@ import {
 } from "@/components/app-sidebar"
 import { DropOverlay } from "@/components/drop-overlay"
 import { EditLock } from "@/components/edit-lock"
+import { ComponentDetail } from "@/components/component-detail"
 import { ComponentGrid } from "@/components/component-grid"
 import { CanEditContext } from "@/lib/gallery-edits"
 import { HowToSave } from "@/components/how-to-save"
@@ -137,8 +138,9 @@ export function App() {
   const [open, setOpen] = React.useState<{ id: string; morph: boolean } | null>(
     null
   )
-  // Which component is opened; the opened view itself comes next.
-  const [, setOpenComponent] = React.useState<LibraryEntry | null>(null)
+  const [openComponent, setOpenComponent] = React.useState<LibraryEntry | null>(
+    null
+  )
   const [adding, setAdding] = React.useState(false)
   const [help, setHelp] = React.useState(false)
   const searchRef = React.useRef<HTMLInputElement>(null)
@@ -207,6 +209,23 @@ export function App() {
 
   const close = React.useCallback(() => setOpen(null), [])
 
+  // ← → move through the components on screen, wrapping around.
+  const stepComponent = React.useCallback(
+    (direction: -1 | 1) => {
+      setOpenComponent((current) => {
+        const count = visibleComponents.length
+        if (!current || !count) return current
+        const index = visibleComponents.indexOf(current)
+        if (index === -1)
+          return visibleComponents[direction === 1 ? 0 : count - 1]
+        return visibleComponents[(index + direction + count) % count]
+      })
+    },
+    [visibleComponents]
+  )
+
+  const closeComponent = React.useCallback(() => setOpenComponent(null), [])
+
   // Paste an image or a link anywhere to save it.
   React.useEffect(() => {
     if (GALLERY || inComponents) return
@@ -231,7 +250,7 @@ export function App() {
   // "/" or ⌘K jumps to search.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (open) return
+      if (open || openComponent) return
       if (
         (e.key === "/" && !isTyping(e.target)) ||
         (e.key === "k" && (e.metaKey || e.ctrlKey))
@@ -242,7 +261,7 @@ export function App() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [open])
+  }, [open, openComponent])
 
   // The browser bookmark button opens the app with ?add=<page>.
   const handledAdd = React.useRef(false)
@@ -436,6 +455,17 @@ export function App() {
                 if (visible.length <= 1) close()
                 void remove(item)
               }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {inComponents && openComponent && (
+            <ComponentDetail
+              key="component-detail"
+              entry={openComponent}
+              onClose={closeComponent}
+              onStep={stepComponent}
             />
           )}
         </AnimatePresence>
