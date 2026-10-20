@@ -72,8 +72,7 @@ export function App() {
     () =>
       items.filter(
         (item) =>
-          (view.kind === "all" ||
-            (view.kind === "untagged" ? !item.tags.length : allTagsOf(item).includes(view.name))) &&
+          (view.kind === "all" || allTagsOf(item).includes(view.name)) &&
           (type === "all" || item.kind === type) &&
           matches(item, query.trim())
       ),
@@ -140,7 +139,7 @@ export function App() {
     void saveLink(url)
   }, [saveLink])
 
-  const heading = view.kind === "all" ? "Everything" : view.kind === "untagged" ? "Untagged" : `#${view.name}`
+  const heading = view.kind === "all" ? "Everything" : `#${view.name}`
   const resetKey = `${heading}|${type}|${query}`
   const filtering = type !== "all" || query.trim() !== ""
 

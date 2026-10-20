@@ -3,7 +3,6 @@ import { motion } from "motion/react"
 import {
   FolderOpenIcon,
   HashIcon,
-  InboxIcon,
   LayersIcon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -21,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { allTagsOf, api, type Item } from "@/lib/api"
 
-export type View = { kind: "all" } | { kind: "untagged" } | { kind: "tag"; name: string }
+export type View = { kind: "all" } | { kind: "tag"; name: string }
 
 type AppSidebarProps = {
   items: Item[]
@@ -38,11 +37,9 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
   const [renaming, setRenaming] = React.useState<string | null>(null)
   const [showAll, setShowAll] = React.useState(false)
 
-  const { tags, untagged } = React.useMemo(() => {
+  const tags = React.useMemo(() => {
     const counts = new Map<string, TagCount>()
-    let untagged = 0
     for (const item of items) {
-      if (!item.tags.length) untagged++
       for (const tag of allTagsOf(item)) {
         const entry = counts.get(tag) ?? { name: tag, count: 0, mine: false }
         entry.count++
@@ -51,10 +48,9 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
       }
     }
     // Your own tags first, then the automatic ones; busiest first within each.
-    const tags = [...counts.values()].sort(
+    return [...counts.values()].sort(
       (a, b) => Number(b.mine) - Number(a.mine) || b.count - a.count || a.name.localeCompare(b.name)
     )
-    return { tags, untagged }
   }, [items])
 
   const isActive = (candidate: View) =>
@@ -78,22 +74,13 @@ export function AppSidebar({ items, view, onView, onHelp }: AppSidebarProps) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4">
-        <div className="flex flex-col gap-0.5">
-          <NavRow
-            icon={<LayersIcon />}
-            label="Everything"
-            count={items.length}
-            active={isActive({ kind: "all" })}
-            onClick={() => onView({ kind: "all" })}
-          />
-          <NavRow
-            icon={<InboxIcon />}
-            label="Untagged"
-            count={untagged}
-            active={isActive({ kind: "untagged" })}
-            onClick={() => onView({ kind: "untagged" })}
-          />
-        </div>
+        <NavRow
+          icon={<LayersIcon />}
+          label="Everything"
+          count={items.length}
+          active={isActive({ kind: "all" })}
+          onClick={() => onView({ kind: "all" })}
+        />
 
         <section className="flex flex-col gap-0.5">
           <span className="px-2 pb-1 text-xs font-medium text-muted-foreground">Tags</span>
