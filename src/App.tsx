@@ -11,7 +11,7 @@ import {
 import { cn } from "cn"
 
 import { AddDialog } from "@/components/add-dialog"
-import { AppSidebar, type View } from "@/components/app-sidebar"
+import { AppSidebar, isUntagged, type View } from "@/components/app-sidebar"
 import { DropOverlay } from "@/components/drop-overlay"
 import { HowToSave } from "@/components/how-to-save"
 import { InspoDetail } from "@/components/inspo-detail"
@@ -130,7 +130,10 @@ export function App() {
     () =>
       items.filter(
         (item) =>
-          (view.kind === "all" || allTagsOf(item).includes(view.name)) &&
+          (view.kind === "all" ||
+            (view.kind === "untagged"
+              ? isUntagged(item)
+              : allTagsOf(item).includes(view.name))) &&
           (type === "all" || item.kind === type) &&
           matches(item, query.trim())
       ),
@@ -202,7 +205,12 @@ export function App() {
     void saveLink(url)
   }, [saveLink])
 
-  const heading = view.kind === "all" ? "Everything" : `#${view.name}`
+  const heading =
+    view.kind === "all"
+      ? "Everything"
+      : view.kind === "untagged"
+        ? "Untagged"
+        : `#${view.name}`
   const resetKey = `${heading}|${type}|${query}`
   const filtering = type !== "all" || query.trim() !== ""
 

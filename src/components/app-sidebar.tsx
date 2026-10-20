@@ -2,6 +2,7 @@ import * as React from "react"
 import { motion } from "motion/react"
 import {
   HashIcon,
+  InboxIcon,
   LayersIcon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -26,7 +27,11 @@ import {
   type PublishState,
 } from "@/lib/api"
 
-export type View = { kind: "all" } | { kind: "tag"; name: string }
+export type View =
+  { kind: "all" } | { kind: "untagged" } | { kind: "tag"; name: string }
+
+/** Items with no tags at all: none of yours and none added automatically. */
+export const isUntagged = (item: Item) => allTagsOf(item).length === 0
 
 type AppSidebarProps = {
   items: Item[]
@@ -70,6 +75,10 @@ export function AppSidebar({
   const [showAll, setShowAll] = React.useState(false)
 
   const tags = React.useMemo(() => countTags(items), [items])
+  const untaggedCount = React.useMemo(
+    () => items.filter(isUntagged).length,
+    [items]
+  )
 
   const isActive = (candidate: View) =>
     candidate.kind === view.kind &&
@@ -99,13 +108,22 @@ export function AppSidebar({
       </div>
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4">
-        <NavRow
-          icon={<LayersIcon />}
-          label="Everything"
-          count={items.length}
-          active={isActive({ kind: "all" })}
-          onClick={() => onView({ kind: "all" })}
-        />
+        <div className="flex flex-col gap-0.5">
+          <NavRow
+            icon={<LayersIcon />}
+            label="Everything"
+            count={items.length}
+            active={isActive({ kind: "all" })}
+            onClick={() => onView({ kind: "all" })}
+          />
+          <NavRow
+            icon={<InboxIcon />}
+            label="Untagged"
+            count={untaggedCount}
+            active={isActive({ kind: "untagged" })}
+            onClick={() => onView({ kind: "untagged" })}
+          />
+        </div>
 
         <section className="flex flex-col gap-0.5">
           <span className="px-2 pb-1 text-xs font-medium text-muted-foreground">
