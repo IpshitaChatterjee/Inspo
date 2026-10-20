@@ -18,6 +18,10 @@ export type Item = {
   autoTags: string[]
   /** Text the Mac could read inside the image, for search. */
   text: string | null
+  /** Main colours by name ("green", "black"…), biggest first. For search. */
+  colors: string[]
+  /** One swatch per colour, as hex. */
+  palette: string[]
   version: number
 }
 

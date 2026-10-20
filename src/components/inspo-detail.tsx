@@ -227,9 +227,6 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
               <ArrowUpRightIcon className="size-3.5" />
             </a>
           )}
-          {item.description && item.kind !== "link" && (
-            <p className="line-clamp-6 text-sm leading-relaxed text-muted-foreground">{item.description}</p>
-          )}
         </div>
 
         <Field label="Tags">
@@ -241,6 +238,27 @@ function DetailPanel({ item, tags, onClose, onStep, onUpdate, onDelete }: Detail
             onRemoveAuto={(tag) => onUpdate(item.id, { autoTags: item.autoTags.filter((t) => t !== tag) })}
           />
         </Field>
+
+        {item.palette.length > 0 && (
+          <Field label="Colours">
+            <div className="flex gap-1.5">
+              {item.palette.map((hex, i) => (
+                <motion.button
+                  key={hex}
+                  type="button"
+                  title={`${item.colors[i]} · ${hex} (click to copy)`}
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 24, delay: i * 0.04 }}
+                  whileHover={{ scale: 1.12 }}
+                  onClick={() => void navigator.clipboard.writeText(hex)}
+                  style={{ backgroundColor: hex }}
+                  className="size-7 rounded-full ring-1 ring-foreground/10"
+                />
+              ))}
+            </div>
+          </Field>
+        )}
 
         <Field label="Note">
           <Textarea

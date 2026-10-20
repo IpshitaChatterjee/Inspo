@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 
 import { analyze, autoTitle } from "./analyze.ts"
+import { captionTags } from "./caption-tags.ts"
 import { captureUrl, extractUrls, type Capture } from "./capture.ts"
 import { INBOX_DIR, INSPO_DIR, LIBRARY_FILE, TMP_DIR } from "./config.ts"
 import { cachedDims, IMAGE_EXTS, measureAll, VIDEO_EXTS } from "./media.ts"
@@ -31,6 +32,10 @@ export type Meta = {
   autoTags?: string[]
   autoTitle?: string
   text?: string
+  colors?: string[]
+  palette?: string[]
+  /** Caption tags have been added once; don't add them again after you remove some. */
+  captionTagged?: boolean
   analyzedAt?: string
   analysisVersion?: number
 }
@@ -56,6 +61,8 @@ export type Item = {
   tags: string[]
   autoTags: string[]
   text: string | null
+  colors: string[]
+  palette: string[]
   version: number
 }
 
@@ -256,6 +263,8 @@ export async function listItems() {
       tags: cleanTags(meta.tags),
       autoTags: cleanTags(meta.autoTags),
       text: meta.text ?? null,
+      colors: meta.colors ?? [],
+      palette: meta.palette ?? [],
       version: Math.round(file.mtimeMs),
     })
   }
@@ -275,8 +284,10 @@ export async function listItems() {
       source: meta.source ?? null,
       note: meta.note ?? "",
       tags: cleanTags(meta.tags),
-      autoTags: [],
+      autoTags: cleanTags(meta.autoTags),
       text: null,
+      colors: [],
+      palette: [],
       version: 0,
     })
   }
@@ -373,7 +384,7 @@ export async function reveal(id: string) {
 
 const analyzeQueue = limiter(2)
 // Bump when analysis learns something new, so older items get looked at again.
-const ANALYSIS_VERSION = 5
+const ANALYSIS_VERSION = 8
 let analyzing = false
 
 /** Tags every file that hasn't been looked at yet, a couple at a time. */
@@ -398,10 +409,14 @@ async function analyzeNew() {
           if (!files.has(file.rel)) return
           const meta = (library.items[file.rel] ??= {})
           // Re-runs keep the auto tags as they are, so ones you removed stay removed.
-          if (!meta.analyzedAt) {
-            const own = cleanTags(meta.tags)
-            meta.autoTags = result.tags.filter((tag) => !own.includes(tag))
+          const own = cleanTags(meta.tags)
+          if (!meta.analyzedAt) meta.autoTags = result.tags
+          // Words from the caption say more than "document", so they go first.
+          if (!meta.captionTagged) {
+            meta.autoTags = cleanTags([...captionTags(meta.description), ...(meta.autoTags ?? [])])
+            meta.captionTagged = true
           }
+          meta.autoTags = (meta.autoTags ?? []).filter((tag) => !own.includes(tag))
           // Tweets saved before v3 were titled with the author's name; let the image speak instead.
           if (meta.title && /^.+ \(@\w+\)$/.test(meta.title)) {
             if (!meta.description?.startsWith(meta.title)) {
@@ -411,6 +426,8 @@ async function analyzeNew() {
           }
           meta.autoTitle = autoTitle(result, meta.description, file.kind === "video") ?? undefined
           meta.text = result.text || undefined
+          meta.colors = result.colors.names
+          meta.palette = result.colors.palette
           meta.analyzedAt = new Date().toISOString()
           meta.analysisVersion = ANALYSIS_VERSION
           // Save in batches so a big first run doesn't rewrite the file thousands of times.
@@ -490,8 +507,15 @@ export async function addLink(url: string, extra: Extra = {}) {
     )
   }
   if (!ids.length) {
+    // Links aren't image-analysed, so their caption tags are added right away.
     const id = `link:${hash(capture.url)}`
-    library.items[id] = { addedAt: new Date().toISOString(), ...library.items[id], ...shared }
+    library.items[id] = {
+      addedAt: new Date().toISOString(),
+      ...library.items[id],
+      ...shared,
+      autoTags: captionTags(capture.description).filter((tag) => !shared.tags?.includes(tag)),
+      captionTagged: true,
+    }
     await saveLibrary()
     ids.push(id)
   }

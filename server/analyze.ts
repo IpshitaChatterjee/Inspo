@@ -1,5 +1,6 @@
 import path from "node:path"
 
+import { colorsOf, type Colors } from "./colors.ts"
 import { mediaFile, VIDEO_EXTS } from "./media.ts"
 import { run } from "./util.ts"
 
@@ -9,7 +10,9 @@ import { run } from "./util.ts"
 const SCRIPT = path.join(import.meta.dirname, "vision.js")
 const MAX_TEXT = 1500
 
-export type Analysis = { tags: string[]; text: string; headline: string | null }
+export type Analysis = { tags: string[]; text: string; headline: string | null; colors: Colors }
+
+const NO_COLORS: Colors = { names: [], palette: [] }
 
 type Line = { text: string; x: number; y: number; h: number }
 
@@ -18,9 +21,9 @@ type Source = { abs: string; ext: string; size: number; mtimeMs: number }
 export async function analyze(source: Source): Promise<Analysis> {
   // Videos are read from their poster frame; vectors can't be read at all.
   // Images use the full size so small text is still legible.
-  if (source.ext === "svg") return { tags: [], text: "", headline: null }
+  if (source.ext === "svg") return { tags: [], text: "", headline: null, colors: NO_COLORS }
   const image = await mediaFile(source, VIDEO_EXTS.has(source.ext) ? "thumb" : "large")
-  if (!image) return { tags: [], text: "", headline: null }
+  if (!image) return { tags: [], text: "", headline: null, colors: NO_COLORS }
 
   const out = await run("osascript", ["-l", "JavaScript", SCRIPT, image], 60_000)
   const parsed = JSON.parse(out) as { labels: string[]; lines: Line[] }
@@ -29,6 +32,7 @@ export async function analyze(source: Source): Promise<Analysis> {
     tags,
     text: parsed.lines.map((line) => line.text).join("\n").slice(0, MAX_TEXT),
     headline: headline(parsed.lines),
+    colors: await colorsOf(image).catch(() => NO_COLORS),
   }
 }
 
@@ -38,8 +42,7 @@ export async function analyze(source: Source): Promise<Analysis> {
  * videos the caption comes first.
  */
 export function autoTitle(analysis: Analysis, caption: string | undefined, isVideo: boolean) {
-  const text = caption?.replace(/^.*?\(@\w+\) — /, "").replace(/https?:\/\/\S+/g, "").trim()
-  const fromCaption = text ? shorten(text.split(/(?<=[.!?])\s/)[0]) : null
+  const fromCaption = captionTitle(caption)
   const ordered = isVideo ? [fromCaption, analysis.headline] : [analysis.headline, fromCaption]
   return ordered.find(Boolean) ?? (analysis.tags[0] ? capitalize(analysis.tags[0]) : null)
 }
@@ -74,6 +77,20 @@ function headline(lines: Line[]) {
   // Misread text tends to be short and full of symbols; better no title than a garbled one.
   const letters = title.match(/\p{L}/gu)?.length ?? 0
   return title.length >= 3 && letters / title.length > 0.6 ? title : null
+}
+
+// The first real line of a caption: no author, links or emoji, and skipping
+// lead-ins like "Just shipped:" or "New:".
+function captionTitle(caption: string | undefined) {
+  if (!caption) return null
+  const lines = caption
+    .replace(/^.*?\(@\w+\) — /, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .split("\n")
+    .map((line) => line.replace(/^[^\p{L}\p{N}]+/u, "").trim())
+    .filter((line) => line && !line.endsWith(":") && line.split(/\s+/).length >= 3)
+  if (!lines.length) return null
+  return shorten(lines[0].split(/(?<=[.!?])\s/)[0])
 }
 
 function shorten(text: string, max = 70) {
