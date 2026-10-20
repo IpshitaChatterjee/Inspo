@@ -1,6 +1,7 @@
 import * as React from "react"
 import { motion } from "motion/react"
 
+import { ComponentBoundary } from "@/components/component-boundary"
 import type { LibraryEntry } from "@/library"
 import { defaultValues } from "@/library/types"
 
@@ -47,6 +48,7 @@ export function ComponentCard({
       .load()
       .then((mod) => setLoaded(() => mod.default))
       .catch(() => {
+        // Tries again the next time the card comes on screen.
         requested.current = false
       })
   }, [onScreen, entry])
@@ -83,7 +85,9 @@ export function ComponentCard({
               transform: `scale(${1 / PREVIEW_SCALE})`,
             }}
           >
-            {React.createElement(Loaded, values, meta.demo)}
+            <ComponentBoundary fallback={null}>
+              {React.createElement(Loaded, values, meta.demo)}
+            </ComponentBoundary>
           </div>
         )}
 
