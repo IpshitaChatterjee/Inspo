@@ -72,7 +72,13 @@ async function pending(env) {
 
 async function login(request, env, body) {
   if (!env.EDIT_PASSWORD_HASH || !env.SESSION_KEY) {
-    return json({ error: "Editing isn't turned on for this gallery." }, 403)
+    return json(
+      {
+        error:
+          "Editing hasn't been set up yet. On your Mac, open Inspo and choose Shared gallery → ⋯ → Set gallery password.",
+      },
+      403
+    )
   }
   // Slow down guessing: a handful of wrong tries per hour per address.
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown"
