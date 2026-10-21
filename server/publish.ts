@@ -187,7 +187,7 @@ async function buildSite() {
   )
 
   await fsp.mkdir(MEDIA_DIR, { recursive: true })
-  const { items, componentTags } = await listItems()
+  const { items, componentTags, projects } = await listItems()
   const keep = new Set<string>()
   const published: Item[] = []
 
@@ -222,7 +222,33 @@ async function buildSite() {
   }
   await fsp.cp(BUILD_DIR, SITE_DIR, { recursive: true })
 
-  const data = JSON.stringify({ items: published, folder: "", componentTags })
+  // Active projects, pointing at the gallery's own ids (archived ones stay private).
+  const publicIds = new Map(items.map((item) => [item.id, publicId(item)]))
+  const sharedProjects = projects
+    .filter((project) => !project.archived)
+    .map((project) => ({
+      ...project,
+      items: project.items.flatMap((id) => publicIds.get(id) ?? []),
+      board: project.board && {
+        ...project.board,
+        order: Array.isArray(project.board.order)
+          ? (project.board.order as string[]).flatMap(
+              (id) => publicIds.get(id) ?? []
+            )
+          : undefined,
+        hidden: Array.isArray(project.board.hidden)
+          ? (project.board.hidden as string[]).flatMap(
+              (id) => publicIds.get(id) ?? []
+            )
+          : undefined,
+      },
+    }))
+  const data = JSON.stringify({
+    items: published,
+    folder: "",
+    componentTags,
+    projects: sharedProjects,
+  })
   await fsp.writeFile(path.join(SITE_DIR, "data.json"), data)
   await fsp.writeFile(
     path.join(SITE_DIR, "_headers"),

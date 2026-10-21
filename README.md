@@ -21,6 +21,18 @@ and run `npx vite build` first so the page is up to date).
 - Links are turned into real image/video files: tweets via the public fxtwitter API, other pages via their
   preview image or video. If nothing can be grabbed, the link is kept as a card.
 
+## Projects and moodboards
+
+- Press **Select** (or the round tick on a card), pick inspos, then **Add to project** → an existing
+  project or **New project…**. An opened inspo also lists its projects, and can be added or taken out.
+- A project has two views: **Collected** (its inspos) and **Moodboard**, a ready-made bento of its
+  pictures plus colour, type and title tiles. The panel beside it picks the layout, reorders pictures
+  (drag) or leaves them off (click), switches tiles, sets gap, corner radius and background, shuffles,
+  and exports a PNG.
+- When a project is done, **Archive** it (it moves under _Archived_ in the sidebar) or **Delete** it
+  (Undo for a few seconds). Neither touches the inspos themselves.
+- Projects are saved in `_library.json`. The shared gallery shows active projects read-only.
+
 ## Shared gallery
 
 The app can publish a read-only copy of the library (images, titles, tags, colours, search; never your

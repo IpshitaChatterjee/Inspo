@@ -12,6 +12,11 @@ import express, {
 import { INSPO_DIR, IS_PROD, PORT, TMP_DIR } from "./config.ts"
 import {
   addLink,
+  changeProjectItems,
+  createProject,
+  deleteProject,
+  restoreProject,
+  updateProject,
   addUpload,
   deleteItem,
   ensureFolders,
@@ -75,6 +80,45 @@ app.post(
   "/api/restore",
   route(async (req, res) => {
     res.json({ id: await restoreItem(param(req.body?.undoId)) })
+  })
+)
+
+app.post(
+  "/api/projects",
+  route(async (req, res) => {
+    const { name, items } = req.body ?? {}
+    res.json(await createProject(name, items))
+  })
+)
+
+app.patch(
+  "/api/projects",
+  route(async (req, res) => {
+    const { id, name, archived, board } = req.body ?? {}
+    res.json(await updateProject(param(id), { name, archived, board }))
+  })
+)
+
+app.post(
+  "/api/projects/items",
+  route(async (req, res) => {
+    const { id, add, remove } = req.body ?? {}
+    res.json(await changeProjectItems(param(id), add, remove))
+  })
+)
+
+app.delete(
+  "/api/projects",
+  route(async (req, res) => {
+    res.json(await deleteProject(param(req.query.id)))
+  })
+)
+
+app.post(
+  "/api/projects/restore",
+  route(async (req, res) => {
+    await restoreProject(req.body?.project)
+    res.json({ ok: true })
   })
 )
 

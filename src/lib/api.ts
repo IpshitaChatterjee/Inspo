@@ -1,3 +1,5 @@
+import type { Board, Project } from "@/lib/projects"
+
 export type Kind = "image" | "video" | "link"
 
 /** The published, read-only copy: browse and search only, data comes from files. */
@@ -57,6 +59,7 @@ export type Library = {
   folder: string
   /** Your tags for Components, by slug, where you've changed them. */
   componentTags?: Record<string, string[]>
+  projects?: Project[]
 }
 
 export type Patch = Partial<Pick<Item, "tags" | "autoTags" | "note" | "title">>
@@ -133,6 +136,20 @@ export const api = {
     request("/api/tags", json("PATCH", { from, to })),
   setComponentTags: (slug: string, tags: string[]) =>
     request("/api/components", json("PATCH", { slug, tags })),
+  createProject: (name: string, items: string[]) =>
+    request<Project>("/api/projects", json("POST", { name, items })),
+  updateProject: (
+    id: string,
+    patch: { name?: string; archived?: boolean; board?: Partial<Board> }
+  ) => request<Project>("/api/projects", json("PATCH", { id, ...patch })),
+  changeProjectItems: (id: string, add: string[], remove: string[]) =>
+    request<Project>("/api/projects/items", json("POST", { id, add, remove })),
+  deleteProject: (id: string) =>
+    request<Project>(`/api/projects?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  restoreProject: (project: Project) =>
+    request("/api/projects/restore", json("POST", { project })),
   reveal: (id?: string) => request("/api/reveal", json("POST", { id })),
   publishState: () => request<PublishState>("/api/publish"),
   publish: () => request<PublishState>("/api/publish", { method: "POST" }),

@@ -57,6 +57,21 @@ type LibraryFile = {
   items: Record<string, Meta>
   /** Your tags for Components, by slug; replaces the tags a component was made with. */
   components?: Record<string, { tags?: string[] }>
+  /** Named collections of inspos, each with its moodboard settings. */
+  projects?: Record<string, Project>
+}
+
+/** Moodboard settings; the app owns their meaning, the library just keeps them. */
+export type Board = Record<string, unknown>
+
+export type Project = {
+  id: string
+  name: string
+  createdAt: string
+  archived?: boolean
+  /** Item ids, in the order they were added. */
+  items: string[]
+  board?: Board
 }
 
 export type Item = {
@@ -125,6 +140,10 @@ async function readLibrary() {
       components:
         parsed.components && typeof parsed.components === "object"
           ? parsed.components
+          : {},
+      projects:
+        parsed.projects && typeof parsed.projects === "object"
+          ? parsed.projects
           : {},
     }
     libraryReadable = true
@@ -363,7 +382,14 @@ export async function listItems() {
     })
   }
   items.sort((a, b) => b.addedAt.localeCompare(a.addedAt))
-  return { items, folder: INSPO_DIR, componentTags: componentTags() }
+  const known = new Set(items.map((item) => item.id))
+  const projects = Object.values(library.projects ?? {})
+    .map((project) => ({
+      ...project,
+      items: project.items.filter((id) => known.has(id)),
+    }))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  return { items, folder: INSPO_DIR, componentTags: componentTags(), projects }
 }
 
 // ---------- Changing ----------
@@ -421,8 +447,99 @@ export async function setComponentTags(slug: string, tags: unknown) {
   notifyChanged()
 }
 
+// ---------- Projects ----------
+
+function project(id: string) {
+  const found = library.projects?.[id]
+  if (!found) throw new Error("That project no longer exists.")
+  return found
+}
+
+function projectName(name: unknown) {
+  const clean = String(name ?? "")
+    .trim()
+    .slice(0, 80)
+  if (!clean) throw new Error("A project needs a name.")
+  return clean
+}
+
+export async function createProject(name: unknown, items: unknown = []) {
+  library.projects ??= {}
+  const created: Project = {
+    id: hash(`${name}${Date.now()}${Math.random()}`),
+    name: projectName(name),
+    createdAt: new Date().toISOString(),
+    items: [...new Set(Array.isArray(items) ? items.map(String) : [])],
+  }
+  library.projects[created.id] = created
+  await saveLibrary()
+  notifyChanged()
+  return created
+}
+
+export async function updateProject(
+  id: string,
+  patch: { name?: unknown; archived?: unknown; board?: unknown }
+) {
+  const found = project(id)
+  if (patch.name !== undefined) found.name = projectName(patch.name)
+  if (patch.archived !== undefined) found.archived = Boolean(patch.archived)
+  if (patch.board !== undefined) {
+    if (!patch.board || typeof patch.board !== "object")
+      throw new Error("Those board settings don't make sense.")
+    found.board = patch.board as Board
+  }
+  await saveLibrary()
+  notifyChanged()
+  return found
+}
+
+/** Adds and removes items; the inspos themselves are never touched. */
+export async function changeProjectItems(
+  id: string,
+  add: unknown,
+  remove: unknown
+) {
+  const found = project(id)
+  const removing = new Set(Array.isArray(remove) ? remove.map(String) : [])
+  found.items = found.items.filter((item) => !removing.has(item))
+  for (const item of Array.isArray(add) ? add.map(String) : []) {
+    if (!found.items.includes(item)) found.items.push(item)
+  }
+  await saveLibrary()
+  notifyChanged()
+  return found
+}
+
+/** Removes the project and its board. Returns it so the app can offer Undo. */
+export async function deleteProject(id: string) {
+  const found = project(id)
+  delete library.projects![id]
+  await saveLibrary()
+  notifyChanged()
+  return found
+}
+
+export async function restoreProject(saved: unknown) {
+  const candidate = saved as Partial<Project>
+  if (!candidate?.id || !Array.isArray(candidate.items))
+    throw new Error("That project can't be restored.")
+  library.projects ??= {}
+  library.projects[candidate.id] = {
+    id: String(candidate.id),
+    name: projectName(candidate.name),
+    createdAt: String(candidate.createdAt ?? new Date().toISOString()),
+    archived: Boolean(candidate.archived),
+    items: candidate.items.map(String),
+    board: candidate.board,
+  }
+  await saveLibrary()
+  notifyChanged()
+}
+
 // Recent deletions, kept for a while so they can be undone with everything intact.
 type Deleted = {
+  projects?: string[]
   id: string
   meta: Meta | undefined
   from?: string
@@ -446,6 +563,13 @@ export async function deleteItem(id: string) {
     throw new Error("That item no longer exists.")
   }
   delete library.items[id]
+  // Leaves every project it was in; Undo puts it back in them.
+  deleted.projects = []
+  for (const project of Object.values(library.projects ?? {})) {
+    if (!project.items.includes(id)) continue
+    project.items = project.items.filter((other) => other !== id)
+    deleted.projects.push(project.id)
+  }
   await saveLibrary()
   notifyChanged()
 
@@ -472,6 +596,10 @@ export async function restoreItem(undoId: string) {
     id = path.relative(INSPO_DIR, target)
   }
   if (deleted.meta) library.items[id] = deleted.meta
+  for (const projectId of deleted.projects ?? []) {
+    const project = library.projects?.[projectId]
+    if (project && !project.items.includes(id)) project.items.push(id)
+  }
   recentlyDeleted.delete(undoId)
   await saveLibrary()
   await scan()

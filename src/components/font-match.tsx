@@ -4,7 +4,7 @@ import { ArrowUpRightIcon } from "lucide-react"
 const loaded = new Set<string>()
 
 /** Pulls a Google Font into the page once, so its name can be shown in itself. */
-function useGoogleFont(family: string, weight: number) {
+export function useGoogleFont(family: string, weight: number) {
   React.useEffect(() => {
     const key = `${family}:${weight}`
     if (loaded.has(key)) return

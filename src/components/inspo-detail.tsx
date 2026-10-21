@@ -11,6 +11,7 @@ import {
 
 import { DetailNav, DetailShell, Field } from "@/components/detail-shell"
 import { FontMatch } from "@/components/font-match"
+import { ProjectsField } from "@/components/projects-field"
 import { useCanEdit } from "@/lib/gallery-edits"
 import { TagInput } from "@/components/tag-input"
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,7 @@ import {
   type Item,
   type Patch,
 } from "@/lib/api"
+import type { Project } from "@/lib/projects"
 
 type InspoDetailProps = {
   item: Item
@@ -40,6 +42,9 @@ type InspoDetailProps = {
   onStep: (direction: -1 | 1) => void
   onUpdate: (id: string, patch: Patch) => void
   onDelete: (item: Item) => void
+  /** Inspo app only: projects this inspo can be added to or taken out of. */
+  projects?: Project[]
+  onProjectChange?: (projectId: string, itemId: string, add: boolean) => void
 }
 
 const spring = { type: "spring", stiffness: 260, damping: 30 } as const
@@ -52,6 +57,8 @@ export function InspoDetail({
   onStep,
   onUpdate,
   onDelete,
+  projects,
+  onProjectChange,
 }: InspoDetailProps) {
   const ratio =
     item.width && item.height
@@ -93,6 +100,8 @@ export function InspoDetail({
           onStep={onStep}
           onUpdate={onUpdate}
           onDelete={onDelete}
+          projects={projects}
+          onProjectChange={onProjectChange}
         />
       }
     />
@@ -172,6 +181,8 @@ function DetailPanel({
   onStep,
   onUpdate,
   onDelete,
+  projects,
+  onProjectChange,
 }: DetailPanelProps) {
   const canEdit = useCanEdit()
   const [title, setTitle] = React.useState(item.title ?? "")
@@ -269,6 +280,18 @@ function DetailPanel({
                 onUpdate(item.id, {
                   autoTags: item.autoTags.filter((t) => t !== tag),
                 })
+              }
+            />
+          </Field>
+        )}
+
+        {projects && onProjectChange && projects.length > 0 && (
+          <Field label="Projects">
+            <ProjectsField
+              itemId={item.id}
+              projects={projects}
+              onChange={(projectId, add) =>
+                onProjectChange(projectId, item.id, add)
               }
             />
           </Field>

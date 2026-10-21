@@ -11,6 +11,7 @@ import {
   type Patch,
   type PublishState,
 } from "@/lib/api"
+import type { Board, Project } from "@/lib/projects"
 import {
   editsFor,
   lock,
@@ -135,6 +136,111 @@ export function useLibrary() {
       }
     },
     [token, refresh]
+  )
+
+  // ---------- Projects ----------
+
+  const setProjects = React.useCallback(
+    (change: (projects: Project[]) => Project[]) =>
+      setLibrary(
+        (lib) => lib && { ...lib, projects: change(lib.projects ?? []) }
+      ),
+    []
+  )
+
+  // Changes show at once; if the Mac app refuses, the real state comes back.
+  const attempt = React.useCallback(
+    async <T>(job: () => Promise<T>) => {
+      try {
+        return await job()
+      } catch (e) {
+        toast.error((e as Error).message)
+        void refresh()
+        return null
+      }
+    },
+    [refresh]
+  )
+
+  const createProject = React.useCallback(
+    async (name: string, items: string[] = []) => {
+      const created = await attempt(() => api.createProject(name, items))
+      if (created) setProjects((projects) => [created, ...projects])
+      return created
+    },
+    [attempt, setProjects]
+  )
+
+  const updateProject = React.useCallback(
+    (id: string, patch: { name?: string; archived?: boolean }) => {
+      setProjects((projects) =>
+        projects.map((p) => (p.id === id ? { ...p, ...patch } : p))
+      )
+      void attempt(() => api.updateProject(id, patch))
+    },
+    [attempt, setProjects]
+  )
+
+  const changeProjectItems = React.useCallback(
+    (id: string, add: string[], remove: string[] = []) => {
+      setProjects((projects) =>
+        projects.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                items: [
+                  ...p.items.filter((item) => !remove.includes(item)),
+                  ...add.filter((item) => !p.items.includes(item)),
+                ],
+              }
+            : p
+        )
+      )
+      void attempt(() => api.changeProjectItems(id, add, remove))
+    },
+    [attempt, setProjects]
+  )
+
+  // Board changes come in quick bursts (sliders), so saving waits for a pause.
+  const boardTimers = React.useRef(
+    new Map<string, ReturnType<typeof setTimeout>>()
+  )
+  const updateBoard = React.useCallback(
+    (id: string, board: Partial<Board>) => {
+      setProjects((projects) =>
+        projects.map((p) => (p.id === id ? { ...p, board } : p))
+      )
+      clearTimeout(boardTimers.current.get(id))
+      boardTimers.current.set(
+        id,
+        setTimeout(
+          () => void attempt(() => api.updateProject(id, { board })),
+          500
+        )
+      )
+    },
+    [attempt, setProjects]
+  )
+
+  const deleteProject = React.useCallback(
+    async (project: Project) => {
+      setProjects((projects) => projects.filter((p) => p.id !== project.id))
+      const removed = await attempt(() => api.deleteProject(project.id))
+      if (!removed) return
+      toast(`Deleted “${project.name}”`, {
+        description: "Its inspos are still in your library.",
+        duration: 8000,
+        action: {
+          label: "Undo",
+          onClick: () =>
+            void attempt(async () => {
+              await api.restoreProject(removed)
+              setProjects((projects) => [removed, ...projects])
+            }),
+        },
+      })
+    },
+    [attempt, setProjects]
   )
 
   // A component's tags, saved to the iCloud library (or sent as a gallery edit).
@@ -280,6 +386,11 @@ export function useLibrary() {
     publishNow,
     canEdit: !GALLERY || !!token,
     updateComponentTags,
+    createProject,
+    updateProject,
+    changeProjectItems,
+    updateBoard,
+    deleteProject,
     unlockEditing,
     lockEditing,
     setEditingPassword,
