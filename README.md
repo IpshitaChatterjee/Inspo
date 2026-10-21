@@ -47,6 +47,7 @@ restarts, or right away with the refresh button under Shared gallery in Inspo.
 
 - `component.tsx`: the component itself, which is what Copy code hands out.
 - `meta.tsx`: its title, description, tags, controls (sliders, colours, toggles, images…) and the prompt text.
+  The tags there are where a component starts; change them in the app (they're saved in `Inspo/_library.json`).
 
 **The copy contract.** So the copied code works when pasted into someone else's React or Next.js project,
 `component.tsx` must be:
@@ -62,7 +63,7 @@ shows until you add that file). `npm test` checks every component against all of
 ## Where things live
 
 - `Inspo/` in iCloud Drive: your images and videos.
-- `Inspo/_library.json`: tags, titles, notes and sources. Syncs with the folder.
+- `Inspo/_library.json`: tags, titles, notes and sources, plus your tags for Components. Syncs with the folder.
 - `Inspo/_inbox/`: drop text files with links here; they get saved and cleared.
 - `~/Library/Caches/inspo`: thumbnails and the built gallery. Safe to delete.
 

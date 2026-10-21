@@ -15,7 +15,14 @@
 const PENDING = "pending"
 const TOKEN_DAYS = 180
 const MAX_FAILS_PER_HOUR = 10
-const OPS = new Set(["addTag", "removeTag", "removeAutoTag", "setTitle", "delete"])
+const OPS = new Set([
+  "addTag",
+  "removeTag",
+  "removeAutoTag",
+  "setTitle",
+  "delete",
+  "setComponentTags",
+])
 
 export default {
   async fetch(request, env) {
@@ -31,25 +38,40 @@ export default {
 
 async function route(request, env, path) {
   if (path === "/api/edits" && request.method === "GET") {
-    return json({ edits: await pending(env) }, 200, { "Cache-Control": "no-store" })
+    return json({ edits: await pending(env) }, 200, {
+      "Cache-Control": "no-store",
+    })
   }
   if (request.method !== "POST") return json({ error: "Not found" }, 404)
   const body = await request.json().catch(() => ({}))
 
   if (path === "/api/login") return login(request, env, body)
-  if (!(await validToken(env, request.headers.get("Authorization")?.replace(/^Bearer /, "")))) {
-    return json({ error: "Editing is locked. Unlock it with your password." }, 401)
+  if (
+    !(await validToken(
+      env,
+      request.headers.get("Authorization")?.replace(/^Bearer /, "")
+    ))
+  ) {
+    return json(
+      { error: "Editing is locked. Unlock it with your password." },
+      401
+    )
   }
 
   if (path === "/api/edits") {
     const { itemId, op, value } = body
-    if (typeof itemId !== "string" || !OPS.has(op)) return json({ error: "That edit doesn't make sense." }, 400)
+    if (typeof itemId !== "string" || !OPS.has(op))
+      return json({ error: "That edit doesn't make sense." }, 400)
     const edit = {
       id: crypto.randomUUID(),
       at: new Date().toISOString(),
       itemId,
       op,
-      value: typeof value === "string" ? value.slice(0, 200) : undefined,
+      // A component's whole tag list travels in one edit, so allow a bit more.
+      value:
+        typeof value === "string"
+          ? value.slice(0, op === "setComponentTags" ? 1000 : 200)
+          : undefined,
     }
     const edits = await pending(env)
     edits.push(edit)
@@ -84,7 +106,8 @@ async function login(request, env, body) {
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown"
   const failKey = `fail:${ip}`
   const fails = Number((await env.EDITS.get(failKey)) ?? 0)
-  if (fails >= MAX_FAILS_PER_HOUR) return json({ error: "Too many wrong tries. Try again in an hour." }, 429)
+  if (fails >= MAX_FAILS_PER_HOUR)
+    return json({ error: "Too many wrong tries. Try again in an hour." }, 429)
 
   const [salt, expected] = env.EDIT_PASSWORD_HASH.split(":")
   const actual = await sha256(`${salt}:${String(body.password ?? "")}`)
@@ -93,7 +116,9 @@ async function login(request, env, body) {
     return json({ error: "That's not the password." }, 401)
   }
   const expires = Date.now() + TOKEN_DAYS * 86_400_000
-  return json({ token: `${expires}.${await sign(env.SESSION_KEY, `edit:${expires}`)}` })
+  return json({
+    token: `${expires}.${await sign(env.SESSION_KEY, `edit:${expires}`)}`,
+  })
 }
 
 async function validToken(env, token) {
@@ -104,7 +129,9 @@ async function validToken(env, token) {
 }
 
 async function sha256(text) {
-  return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))
+  return hex(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
+  )
 }
 
 async function sign(key, message) {
@@ -115,11 +142,19 @@ async function sign(key, message) {
     false,
     ["sign"]
   )
-  return hex(await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(message)))
+  return hex(
+    await crypto.subtle.sign(
+      "HMAC",
+      cryptoKey,
+      new TextEncoder().encode(message)
+    )
+  )
 }
 
 function hex(buffer) {
-  return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("")
+  return [...new Uint8Array(buffer)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
 }
 
 // Compares without leaking how much matched through timing.

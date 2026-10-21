@@ -9,6 +9,7 @@ import {
   deleteItem,
   getFile,
   listItems,
+  setComponentTags,
   updateItem,
   type Item,
 } from "./library.ts"
@@ -186,7 +187,7 @@ async function buildSite() {
   )
 
   await fsp.mkdir(MEDIA_DIR, { recursive: true })
-  const { items } = await listItems()
+  const { items, componentTags } = await listItems()
   const keep = new Set<string>()
   const published: Item[] = []
 
@@ -221,7 +222,7 @@ async function buildSite() {
   }
   await fsp.cp(BUILD_DIR, SITE_DIR, { recursive: true })
 
-  const data = JSON.stringify({ items: published, folder: "" })
+  const data = JSON.stringify({ items: published, folder: "", componentTags })
   await fsp.writeFile(path.join(SITE_DIR, "data.json"), data)
   await fsp.writeFile(
     path.join(SITE_DIR, "_headers"),
@@ -541,6 +542,20 @@ export async function pullGalleryEdits() {
     const { items } = await listItems()
     const byPublicId = new Map(items.map((item) => [publicId(item), item]))
     for (const edit of fresh) {
+      // Tag changes for a component ("component:<slug>") carry the full tag list.
+      if (
+        edit.op === "setComponentTags" &&
+        edit.itemId.startsWith("component:")
+      ) {
+        await setComponentTags(
+          edit.itemId.slice("component:".length),
+          (edit.value ?? "").split(",")
+        ).catch((error) =>
+          console.warn(`[edits] ${edit.itemId}: ${errorMessage(error)}`)
+        )
+        applied.add(edit.id)
+        continue
+      }
       const item = byPublicId.get(edit.itemId)
       if (item) {
         try {

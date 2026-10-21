@@ -7,7 +7,12 @@ import type { Item, Patch } from "@/lib/api"
 // up by the Mac, which writes them into the iCloud library.
 
 export type EditOp =
-  "addTag" | "removeTag" | "removeAutoTag" | "setTitle" | "delete"
+  | "addTag"
+  | "removeTag"
+  | "removeAutoTag"
+  | "setTitle"
+  | "delete"
+  | "setComponentTags"
 export type GalleryEdit = {
   id?: string
   itemId: string
@@ -77,6 +82,23 @@ export async function sendEdit(token: string, edit: GalleryEdit) {
 }
 
 /** The library as it will be once the Mac has applied the pending edits. */
+/** Component tags as they'll be once the Mac has applied pending edits ("component:<slug>"). */
+export function withComponentEdits(
+  tags: Record<string, string[]>,
+  edits: GalleryEdit[]
+) {
+  const next = { ...tags }
+  for (const edit of edits) {
+    if (edit.op !== "setComponentTags" || !edit.itemId.startsWith("component:"))
+      continue
+    next[edit.itemId.slice("component:".length)] = (edit.value ?? "")
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  }
+  return next
+}
+
 export function withEdits(items: Item[], edits: GalleryEdit[]) {
   const byId = new Map(items.map((item) => [item.id, { ...item }]))
   for (const edit of edits) {

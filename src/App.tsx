@@ -126,7 +126,17 @@ export function App() {
     unlockEditing,
     lockEditing,
     setEditingPassword,
+    updateComponentTags,
   } = useLibrary()
+  // Components with your tag changes applied (saved in the iCloud library).
+  const componentEntries = React.useMemo(
+    () =>
+      componentLibrary.map((entry) => {
+        const tags = library?.componentTags?.[entry.meta.slug]
+        return tags ? { ...entry, meta: { ...entry.meta, tags } } : entry
+      }),
+    [library]
+  )
   const [app, setApp] = useCurrentApp()
   const [view, setView] = React.useState<View>({ kind: "all" })
   const [type, setType] = React.useState<TypeFilter>("all")
@@ -153,8 +163,8 @@ export function App() {
 
   // The sidebar and phone chips are shared, so each app hands them its own tags.
   const componentTags = React.useMemo<TagCount[]>(
-    () => componentTagCounts(componentLibrary),
-    []
+    () => componentTagCounts(componentEntries),
+    [componentEntries]
   )
   const inspoTags = React.useMemo(() => countTags(items), [items])
   const inspoUntagged = React.useMemo(
@@ -164,13 +174,13 @@ export function App() {
   const inComponents = app === "components"
   const sidebarTags = inComponents ? componentTags : inspoTags
   const sidebarUntagged = inComponents
-    ? componentLibrary.filter((entry) => entry.meta.tags.length === 0).length
+    ? componentEntries.filter((entry) => entry.meta.tags.length === 0).length
     : inspoUntagged
 
   // Each app searches only its own things.
   const visibleComponents = React.useMemo(
-    () => (inComponents ? filterComponents(componentLibrary, view, query) : []),
-    [inComponents, view, query]
+    () => (inComponents ? filterComponents(componentEntries, view, query) : []),
+    [inComponents, componentEntries, view, query]
   )
   const visible = React.useMemo(
     () =>
@@ -299,10 +309,10 @@ export function App() {
             app={app}
             counts={{
               inspo: items.length,
-              components: componentLibrary.length,
+              components: componentEntries.length,
             }}
             tags={sidebarTags}
-            total={inComponents ? componentLibrary.length : items.length}
+            total={inComponents ? componentEntries.length : items.length}
             untagged={sidebarUntagged}
             view={view}
             publish={publish}
@@ -324,7 +334,7 @@ export function App() {
                   app={app}
                   counts={{
                     inspo: items.length,
-                    components: componentLibrary.length,
+                    components: componentEntries.length,
                   }}
                   onChange={switchApp}
                 />
@@ -403,7 +413,7 @@ export function App() {
                 <span className="text-sm text-muted-foreground tabular-nums">
                   {inComponents ? visibleComponents.length : visible.length}
                   {inComponents
-                    ? filteringComponents && ` of ${componentLibrary.length}`
+                    ? filteringComponents && ` of ${componentEntries.length}`
                     : filtering && ` of ${items.length}`}
                 </span>
               </div>
@@ -418,12 +428,12 @@ export function App() {
                   <Empty className="flex-1">
                     <EmptyHeader>
                       <EmptyTitle className="font-heading">
-                        {componentLibrary.length
+                        {componentEntries.length
                           ? "No components match"
                           : "Nothing here yet"}
                       </EmptyTitle>
                       <EmptyDescription>
-                        {componentLibrary.length
+                        {componentEntries.length
                           ? "Try another search or tag."
                           : "Components you make will show up here."}
                       </EmptyDescription>
@@ -476,7 +486,13 @@ export function App() {
           {inComponents && openComponent && (
             <ComponentDetail
               key="component-detail"
-              entry={openComponent}
+              entry={
+                componentEntries.find(
+                  (entry) => entry.meta.slug === openComponent.meta.slug
+                ) ?? openComponent
+              }
+              tagSuggestions={componentTags.map((t) => t.name)}
+              onTagsChange={updateComponentTags}
               onClose={closeComponent}
               onStep={stepComponent}
             />

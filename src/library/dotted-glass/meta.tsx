@@ -51,7 +51,7 @@ export default defineComponent({
       min: 0.5,
       max: 8,
       step: 0.5,
-      default: 2,
+      default: 3,
       unit: "px",
     },
     {
@@ -95,6 +95,47 @@ export default defineComponent({
       ],
       default: "soft-light",
     },
+    {
+      key: "sizeVariation",
+      label: "Size variation",
+      type: "slider",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      default: 0.7,
+    },
+    {
+      key: "patchSize",
+      label: "Patch size",
+      type: "slider",
+      min: 30,
+      max: 600,
+      step: 10,
+      default: 140,
+      unit: "px",
+    },
+    {
+      key: "edgeFade",
+      label: "Edge fade",
+      type: "slider",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      default: 0.3,
+    },
+    {
+      key: "fadeFrom",
+      label: "Fade from",
+      type: "select",
+      options: [
+        { value: "edges", label: "All edges" },
+        { value: "top", label: "Top" },
+        { value: "bottom", label: "Bottom" },
+        { value: "top-bottom", label: "Top and bottom" },
+        { value: "none", label: "No fade" },
+      ],
+      default: "top",
+    },
   ],
   prompt: (v) => {
     const background = String(v.background)
@@ -108,14 +149,24 @@ export default defineComponent({
     const percent = Math.round(Number(v.dotOpacity) * 100)
     const dot =
       v.shape === "circle"
-        ? `round dots ${v.dotSize}px across`
-        : `square dots ${v.dotSize}px wide`
+        ? `round dots up to ${v.dotSize}px across`
+        : `square dots up to ${v.dotSize}px wide`
+    const fadeEdges: Record<string, string> = {
+      edges: "all four edges",
+      top: "the top edge",
+      bottom: "the bottom edge",
+      "top-bottom": "the top and bottom edges",
+    }
+    const fade =
+      v.fadeFrom === "none" || Number(v.edgeFade) === 0
+        ? `No edge fade (fade from: ${v.fadeFrom}, edge fade ${v.edgeFade}).`
+        : `Near ${fadeEdges[String(v.fadeFrom)] ?? "the edges"} (fade from: ${v.fadeFrom}) the dots shrink and fade out smoothly; the fade reaches ${Math.round(Number(v.edgeFade) * 100)}% of the way in (edge fade ${v.edgeFade}).`
 
     return `Build a React component called DottedGlass: a soft, frosted-glass background with a fine grid of dots over it, like a blurred photo seen through an LED panel. It fills its parent and centres whatever I put inside it.
 
 Layers, bottom to top:
 1. Background: ${describeBackground}. Size it to cover and centre it, then blur it ${v.blur}px. Make this layer bigger than the frame (about twice the blur past each edge) and clip it with overflow: hidden, so the blurred edges don't show a pale halo.
-2. Dots: ${dot}, one every ${v.spacing}px in a regular grid, coloured ${v.dotColor} at ${percent}% opacity (opacity ${v.dotOpacity}), shape ${v.shape}, blend mode ${v.blend} (mix-blend-mode), so they show up more over darker parts of the background. Draw them with CSS gradients repeated with background-size, not with lots of elements.
+2. Dots: ${dot}, one every ${v.spacing}px in a regular grid, coloured ${v.dotColor} at ${percent}% opacity (opacity ${v.dotOpacity}), shape ${v.shape}, blend mode ${v.blend} (mix-blend-mode), so they show up more over darker parts of the background. Draw them on a <canvas> (sized to the frame and the screen's pixel ratio, redrawn on resize) so each dot can have its own size. Dot sizes vary in soft, drifting patches about ${v.patchSize}px across, using smooth value noise: size variation ${v.sizeVariation} (0 means every dot is the same size; 1 means the smallest dots shrink away entirely). ${fade}
 3. Content: children centred on top, unaffected by the blend.
 
 Expose every value above as a prop with these as the defaults. Keep it to one .tsx file that starts with "use client", imports only from react, and uses inline styles (no Tailwind, no other libraries), so it works in a Next.js or Vite project.`

@@ -9,7 +9,17 @@ import { captionTags } from "./caption-tags.ts"
 import { captureUrl, extractUrls, type Capture } from "./capture.ts"
 import { INBOX_DIR, INSPO_DIR, LIBRARY_FILE, TMP_DIR } from "./config.ts"
 import { cachedDims, IMAGE_EXTS, measureAll, VIDEO_EXTS } from "./media.ts"
-import { ensureDownloaded, errorMessage, hash, limiter, moveFile, run, slugify, stamp, uniquePath } from "./util.ts"
+import {
+  ensureDownloaded,
+  errorMessage,
+  hash,
+  limiter,
+  moveFile,
+  run,
+  slugify,
+  stamp,
+  uniquePath,
+} from "./util.ts"
 
 // The folder is the source of truth for media. _library.json (also in the
 // folder, so it syncs) holds what the files can't: tags, titles, notes,
@@ -45,6 +55,8 @@ export type Meta = {
 type LibraryFile = {
   version: 2
   items: Record<string, Meta>
+  /** Your tags for Components, by slug; replaces the tags a component was made with. */
+  components?: Record<string, { tags?: string[] }>
 }
 
 export type Item = {
@@ -108,14 +120,21 @@ async function readLibrary() {
     const parsed = JSON.parse(raw) as Partial<LibraryFile>
     library = {
       version: 2,
-      items: parsed.items && typeof parsed.items === "object" ? parsed.items : {},
+      items:
+        parsed.items && typeof parsed.items === "object" ? parsed.items : {},
+      components:
+        parsed.components && typeof parsed.components === "object"
+          ? parsed.components
+          : {},
     }
     libraryReadable = true
     const merged = mergeCategoriesIntoTags()
     if (dropIgnoredAutoTags() || merged) await saveLibrary()
   } catch (error) {
     libraryReadable = false
-    console.warn(`[library] ${LIBRARY_FILE} could not be read, not saving until it can: ${errorMessage(error)}`)
+    console.warn(
+      `[library] ${LIBRARY_FILE} could not be read, not saving until it can: ${errorMessage(error)}`
+    )
   }
 }
 
@@ -124,7 +143,8 @@ function mergeCategoriesIntoTags() {
   let changed = false
   for (const meta of Object.values(library.items)) {
     if (!("category" in meta)) continue
-    if (meta.category) meta.tags = cleanTags([...(meta.tags ?? []), meta.category])
+    if (meta.category)
+      meta.tags = cleanTags([...(meta.tags ?? []), meta.category])
     delete meta.category
     changed = true
   }
@@ -148,7 +168,10 @@ let writing: Promise<void> = Promise.resolve()
 
 function saveLibrary() {
   writing = writing.then(async () => {
-    if (!libraryReadable) throw new Error("The library file is unreadable right now; try again in a moment.")
+    if (!libraryReadable)
+      throw new Error(
+        "The library file is unreadable right now; try again in a moment."
+      )
     const content = JSON.stringify(library, null, 2)
     const temp = `${LIBRARY_FILE}.tmp`
     await fsp.writeFile(temp, content)
@@ -160,7 +183,12 @@ function saveLibrary() {
 
 // ---------- Scanning the folder ----------
 
-async function walk(dir: string, prefix: string, out: Map<string, FileEntry>, linkFiles: string[]) {
+async function walk(
+  dir: string,
+  prefix: string,
+  out: Map<string, FileEntry>,
+  linkFiles: string[]
+) {
   let entries: fs.Dirent[]
   try {
     entries = await fsp.readdir(dir, { withFileTypes: true })
@@ -181,11 +209,23 @@ async function walk(dir: string, prefix: string, out: Map<string, FileEntry>, li
       linkFiles.push(abs)
       continue
     }
-    const kind = IMAGE_EXTS.has(ext) ? "image" : VIDEO_EXTS.has(ext) ? "video" : null
+    const kind = IMAGE_EXTS.has(ext)
+      ? "image"
+      : VIDEO_EXTS.has(ext)
+        ? "video"
+        : null
     if (!kind) continue
     try {
       const stat = await fsp.stat(abs)
-      out.set(rel, { rel, abs, ext, kind, size: stat.size, mtimeMs: stat.mtimeMs, birthtimeMs: stat.birthtimeMs })
+      out.set(rel, {
+        rel,
+        abs,
+        ext,
+        kind,
+        size: stat.size,
+        mtimeMs: stat.mtimeMs,
+        birthtimeMs: stat.birthtimeMs,
+      })
     } catch {
       // Vanished between readdir and stat.
     }
@@ -203,13 +243,17 @@ export function scan(): Promise<void> {
   scanning = (async () => {
     do {
       rescanWanted = false
-      await readLibrary().catch((error) => console.warn(`[library] ${errorMessage(error)}`))
+      await readLibrary().catch((error) =>
+        console.warn(`[library] ${errorMessage(error)}`)
+      )
       const next = new Map<string, FileEntry>()
       const linkFiles: string[] = []
       await walk(INSPO_DIR, "", next, linkFiles)
       files = next
       void processInbox(linkFiles)
-      void measureAll([...next.values()]).then((changed) => changed && notifyChanged())
+      void measureAll([...next.values()]).then(
+        (changed) => changed && notifyChanged()
+      )
       void analyzeNew()
     } while (rescanWanted)
   })().finally(() => {
@@ -231,13 +275,17 @@ function notifyChanged() {
 
 export function watch() {
   let timer: NodeJS.Timeout | null = null
-  const watcher = fs.watch(INSPO_DIR, { recursive: true }, (_event, filename) => {
-    if (filename && path.basename(filename) === ".DS_Store") return
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      void scan().then(notifyChanged)
-    }, 400)
-  })
+  const watcher = fs.watch(
+    INSPO_DIR,
+    { recursive: true },
+    (_event, filename) => {
+      if (filename && path.basename(filename) === ".DS_Store") return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        void scan().then(notifyChanged)
+      }, 400)
+    }
+  )
   watcher.on("error", (error) => console.warn(`[watch] ${errorMessage(error)}`))
   // fs.watch can miss events on cloud folders, so also look every so often.
   setInterval(() => void scan().then(notifyChanged), 60_000)
@@ -271,7 +319,9 @@ export async function listItems() {
       name: path.basename(file.rel),
       folder,
       size: file.size,
-      addedAt: meta.addedAt ?? new Date(file.birthtimeMs || file.mtimeMs).toISOString(),
+      addedAt:
+        meta.addedAt ??
+        new Date(file.birthtimeMs || file.mtimeMs).toISOString(),
       width: meta.width ?? measured?.[0] ?? null,
       height: meta.height ?? measured?.[1] ?? null,
       // Your own title wins; otherwise the one worked out from the image.
@@ -313,7 +363,7 @@ export async function listItems() {
     })
   }
   items.sort((a, b) => b.addedAt.localeCompare(a.addedAt))
-  return { items, folder: INSPO_DIR }
+  return { items, folder: INSPO_DIR, componentTags: componentTags() }
 }
 
 // ---------- Changing ----------
@@ -321,12 +371,14 @@ export async function listItems() {
 export type Patch = Pick<Meta, "tags" | "autoTags" | "note" | "title">
 
 export async function updateItem(id: string, patch: Patch) {
-  if (!files.has(id) && !library.items[id]) throw new Error("That item no longer exists.")
+  if (!files.has(id) && !library.items[id])
+    throw new Error("That item no longer exists.")
   const meta = (library.items[id] ??= {})
   if (patch.tags !== undefined) meta.tags = cleanTags(patch.tags)
   if (patch.autoTags !== undefined) meta.autoTags = cleanTags(patch.autoTags)
   if (patch.note !== undefined) meta.note = String(patch.note)
-  if (patch.title !== undefined) meta.title = (patch.title ?? "").toString().trim() || undefined
+  if (patch.title !== undefined)
+    meta.title = (patch.title ?? "").toString().trim() || undefined
   await saveLibrary()
   notifyChanged()
 }
@@ -339,17 +391,43 @@ export async function renameTag(from: string, to: string | null) {
     for (const key of ["tags", "autoTags"] as const) {
       const list = meta[key]
       if (!list?.includes(source)) continue
-      meta[key] = cleanTags(list.map((tag) => (tag === source ? target : tag)).filter(Boolean))
+      meta[key] = cleanTags(
+        list.map((tag) => (tag === source ? target : tag)).filter(Boolean)
+      )
     }
     // Don't show the same tag twice once it's become one of yours.
-    if (meta.autoTags && meta.tags) meta.autoTags = meta.autoTags.filter((tag) => !meta.tags!.includes(tag))
+    if (meta.autoTags && meta.tags)
+      meta.autoTags = meta.autoTags.filter((tag) => !meta.tags!.includes(tag))
   }
   await saveLibrary()
   notifyChanged()
 }
 
+/** Your tag changes for Components, by slug (only the ones you've changed). */
+function componentTags() {
+  const tags: Record<string, string[]> = {}
+  for (const [slug, entry] of Object.entries(library.components ?? {})) {
+    if (entry.tags) tags[slug] = cleanTags(entry.tags)
+  }
+  return tags
+}
+
+export async function setComponentTags(slug: string, tags: unknown) {
+  if (!/^[a-z0-9-]+$/.test(slug))
+    throw new Error("That component doesn't exist.")
+  library.components ??= {}
+  library.components[slug] = { tags: cleanTags(tags) }
+  await saveLibrary()
+  notifyChanged()
+}
+
 // Recent deletions, kept for a while so they can be undone with everything intact.
-type Deleted = { id: string; meta: Meta | undefined; from?: string; trashed?: string }
+type Deleted = {
+  id: string
+  meta: Meta | undefined
+  from?: string
+  trashed?: string
+}
 const recentlyDeleted = new Map<string, Deleted>()
 const UNDO_FOR_MS = 10 * 60_000
 
@@ -380,11 +458,16 @@ export async function deleteItem(id: string) {
 /** Puts a deleted item back where it was, tags and all. */
 export async function restoreItem(undoId: string) {
   const deleted = recentlyDeleted.get(undoId)
-  if (!deleted) throw new Error("That can't be undone any more. It's still in the Bin.")
+  if (!deleted)
+    throw new Error("That can't be undone any more. It's still in the Bin.")
   let id = deleted.id
   if (deleted.from && deleted.trashed) {
     const ext = path.extname(deleted.from).slice(1)
-    const target = await uniquePath(path.dirname(deleted.from), path.basename(deleted.from, `.${ext}`), ext)
+    const target = await uniquePath(
+      path.dirname(deleted.from),
+      path.basename(deleted.from, `.${ext}`),
+      ext
+    )
     await moveFile(deleted.trashed, target)
     id = path.relative(INSPO_DIR, target)
   }
@@ -414,7 +497,8 @@ async function analyzeNew() {
   analyzing = true
   try {
     const pending = [...files.values()].filter(
-      (file) => (library.items[file.rel]?.analysisVersion ?? 0) < ANALYSIS_VERSION
+      (file) =>
+        (library.items[file.rel]?.analysisVersion ?? 0) < ANALYSIS_VERSION
     )
     let unsaved = 0
     await Promise.all(
@@ -434,22 +518,34 @@ async function analyzeNew() {
           if (!meta.analyzedAt) meta.autoTags = result.tags
           // Words from the caption say more than "document", so they go first.
           if (!meta.captionTagged) {
-            meta.autoTags = cleanTags([...captionTags(meta.description), ...(meta.autoTags ?? [])])
+            meta.autoTags = cleanTags([
+              ...captionTags(meta.description),
+              ...(meta.autoTags ?? []),
+            ])
             meta.captionTagged = true
           }
-          meta.autoTags = (meta.autoTags ?? []).filter((tag) => !own.includes(tag))
+          meta.autoTags = (meta.autoTags ?? []).filter(
+            (tag) => !own.includes(tag)
+          )
           // Tweets saved before v3 were titled with the author's name; let the image speak instead.
           if (meta.title && /^.+ \(@\w+\)$/.test(meta.title)) {
             if (!meta.description?.startsWith(meta.title)) {
-              meta.description = [meta.title, meta.description].filter(Boolean).join(" — ")
+              meta.description = [meta.title, meta.description]
+                .filter(Boolean)
+                .join(" — ")
             }
             delete meta.title
           }
-          meta.autoTitle = autoTitle(result, meta.description, file.kind === "video") ?? undefined
+          meta.autoTitle =
+            autoTitle(result, meta.description, file.kind === "video") ??
+            undefined
           meta.text = result.text || undefined
           meta.colors = result.colors.names
           meta.palette = result.colors.palette
-          meta.fonts = result.fonts.map(({ family, weight }) => ({ family, weight }))
+          meta.fonts = result.fonts.map(({ family, weight }) => ({
+            family,
+            weight,
+          }))
           meta.analyzedAt = new Date().toISOString()
           meta.analysisVersion = ANALYSIS_VERSION
           // Save in batches so a big first run doesn't rewrite the file thousands of times.
@@ -477,7 +573,12 @@ async function analyzeNew() {
 type Extra = { tags?: string[] }
 
 /** Moves a finished temp file into the folder and records its details. */
-export async function placeFile(tempPath: string, baseName: string, ext: string, meta: Meta) {
+export async function placeFile(
+  tempPath: string,
+  baseName: string,
+  ext: string,
+  meta: Meta
+) {
   const target = await uniquePath(INSPO_DIR, slugify(baseName, 80), ext)
   const rel = path.relative(INSPO_DIR, target)
   library.items[rel] = { addedAt: new Date().toISOString(), ...meta }
@@ -487,14 +588,22 @@ export async function placeFile(tempPath: string, baseName: string, ext: string,
   return rel
 }
 
-export async function addUpload(tempPath: string, originalName: string, extra: Extra) {
+export async function addUpload(
+  tempPath: string,
+  originalName: string,
+  extra: Extra
+) {
   const ext = path.extname(originalName).slice(1).toLowerCase()
   if (!IMAGE_EXTS.has(ext) && !VIDEO_EXTS.has(ext)) {
     await fsp.rm(tempPath, { force: true })
-    throw new Error(`${originalName} isn't an image or video this app can show.`)
+    throw new Error(
+      `${originalName} isn't an image or video this app can show.`
+    )
   }
   const base = path.basename(originalName, path.extname(originalName))
-  const rel = await placeFile(tempPath, base, ext, { tags: cleanTags(extra.tags) })
+  const rel = await placeFile(tempPath, base, ext, {
+    tags: cleanTags(extra.tags),
+  })
   await scan()
   notifyChanged()
   return rel
@@ -525,7 +634,11 @@ export async function addLink(url: string, extra: Extra = {}) {
   const base = `${slugify(capture.title ?? host, 40)}-${stamp()}`
   for (const file of capture.files) {
     ids.push(
-      await placeFile(file.tempPath, base, file.ext, { ...shared, width: file.width, height: file.height })
+      await placeFile(file.tempPath, base, file.ext, {
+        ...shared,
+        width: file.width,
+        height: file.height,
+      })
     )
   }
   if (!ids.length) {
@@ -535,7 +648,9 @@ export async function addLink(url: string, extra: Extra = {}) {
       addedAt: new Date().toISOString(),
       ...library.items[id],
       ...shared,
-      autoTags: captionTags(capture.description).filter((tag) => !shared.tags?.includes(tag)),
+      autoTags: captionTags(capture.description).filter(
+        (tag) => !shared.tags?.includes(tag)
+      ),
       captionTagged: true,
     }
     await saveLibrary()
@@ -543,7 +658,11 @@ export async function addLink(url: string, extra: Extra = {}) {
   }
   await scan()
   notifyChanged()
-  return { ids, title: capture.title ?? host, savedMedia: capture.files.length > 0 }
+  return {
+    ids,
+    title: capture.title ?? host,
+    savedMedia: capture.files.length > 0,
+  }
 }
 
 // Link files dropped into _inbox (or .webloc/.url files anywhere) get saved,
@@ -589,6 +708,7 @@ async function processInbox(linkFiles: string[]) {
 async function readLinkFile(file: string, ext: string) {
   await ensureDownloaded(file)
   // .webloc files can be binary property lists; plutil turns them into text.
-  if (ext === "webloc") return run("plutil", ["-convert", "xml1", "-o", "-", file])
+  if (ext === "webloc")
+    return run("plutil", ["-convert", "xml1", "-o", "-", file])
   return fsp.readFile(file, "utf8")
 }

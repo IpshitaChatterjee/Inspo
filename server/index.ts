@@ -19,6 +19,7 @@ import {
   getFile,
   listItems,
   renameTag,
+  setComponentTags,
   restoreItem,
   reveal,
   scan,
@@ -74,6 +75,15 @@ app.post(
   "/api/restore",
   route(async (req, res) => {
     res.json({ id: await restoreItem(param(req.body?.undoId)) })
+  })
+)
+
+app.patch(
+  "/api/components",
+  route(async (req, res) => {
+    const { slug, tags } = req.body ?? {}
+    await setComponentTags(param(slug), tags)
+    res.json({ ok: true })
   })
 )
 

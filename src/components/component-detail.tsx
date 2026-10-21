@@ -8,6 +8,8 @@ import { ComponentControls } from "@/components/component-controls"
 import { DetailNav, DetailShell, Field } from "@/components/detail-shell"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { TagInput } from "@/components/tag-input"
+import { useCanEdit } from "@/lib/gallery-edits"
 import { copyText } from "@/lib/copy-text"
 import type { LibraryEntry } from "@/library"
 import { bakeValues, forCopy } from "@/library/code"
@@ -17,6 +19,8 @@ type LoadedComponent = Awaited<ReturnType<LibraryEntry["load"]>>["default"]
 
 type ComponentDetailProps = {
   entry: LibraryEntry
+  tagSuggestions: string[]
+  onTagsChange: (slug: string, tags: string[]) => void
   onClose: () => void
   onStep: (direction: -1 | 1) => void
 }
@@ -28,6 +32,8 @@ const RATIO = 4 / 3
 // controls and copy buttons on the right.
 export function ComponentDetail({
   entry,
+  tagSuggestions,
+  onTagsChange,
   onClose,
   onStep,
 }: ComponentDetailProps) {
@@ -107,6 +113,8 @@ export function ComponentDetail({
         <ComponentPanel
           key={meta.slug}
           entry={entry}
+          tagSuggestions={tagSuggestions}
+          onTagsChange={onTagsChange}
           values={values}
           onChange={(key, value) =>
             setValues((current) => ({ ...current, [key]: value }))
@@ -122,6 +130,8 @@ export function ComponentDetail({
 
 type ComponentPanelProps = {
   entry: LibraryEntry
+  tagSuggestions: string[]
+  onTagsChange: (slug: string, tags: string[]) => void
   values: Values
   onChange: (key: string, value: ControlValue) => void
   onReset: () => void
@@ -136,6 +146,8 @@ async function copy(text: string, done: string) {
 
 function ComponentPanel({
   entry,
+  tagSuggestions,
+  onTagsChange,
   values,
   onChange,
   onReset,
@@ -143,6 +155,7 @@ function ComponentPanel({
   onStep,
 }: ComponentPanelProps) {
   const { meta } = entry
+  const canEdit = useCanEdit()
   const changed = meta.controls.some(
     (c) => (values[c.key] ?? c.default) !== c.default
   )
@@ -163,19 +176,29 @@ function ComponentPanel({
           )}
         </div>
 
-        {meta.tags.length > 0 && (
+        {canEdit ? (
           <Field label="Tags">
-            <div className="flex flex-wrap gap-1.5">
-              {meta.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex h-6 items-center rounded-full bg-secondary px-2.5 text-xs font-medium text-secondary-foreground"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
+            <TagInput
+              value={meta.tags}
+              suggestions={tagSuggestions}
+              onChange={(tags) => onTagsChange(meta.slug, tags)}
+            />
           </Field>
+        ) : (
+          meta.tags.length > 0 && (
+            <Field label="Tags">
+              <div className="flex flex-wrap gap-1.5">
+                {meta.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex h-6 items-center rounded-full bg-secondary px-2.5 text-xs font-medium text-secondary-foreground"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </Field>
+          )
         )}
 
         {meta.controls.length > 0 && (

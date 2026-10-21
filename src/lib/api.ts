@@ -55,17 +55,23 @@ export const GALLERY_WARN_AT = 0.8
 export type Library = {
   items: Item[]
   folder: string
+  /** Your tags for Components, by slug, where you've changed them. */
+  componentTags?: Record<string, string[]>
 }
 
 export type Patch = Partial<Pick<Item, "tags" | "autoTags" | "note" | "title">>
 
 /** Your tags first, then auto tags you haven't already added yourself. */
 export function allTagsOf(item: Pick<Item, "tags" | "autoTags">) {
-  return [...item.tags, ...item.autoTags.filter((tag) => !item.tags.includes(tag))]
+  return [
+    ...item.tags,
+    ...item.autoTags.filter((tag) => !item.tags.includes(tag)),
+  ]
 }
 
 export function mediaUrl(item: Item, size: "thumb" | "large" | "orig") {
-  if (item.media) return `/m/${size === "thumb" ? item.media.thumb : (item.media.full ?? item.media.thumb)}`
+  if (item.media)
+    return `/m/${size === "thumb" ? item.media.thumb : (item.media.full ?? item.media.thumb)}`
   return `/api/media?id=${encodeURIComponent(item.id)}&size=${size}&v=${item.version}`
 }
 
@@ -86,7 +92,8 @@ export function hostOf(url: string | null) {
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, init)
   const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(body.error ?? `Something went wrong (${res.status})`)
+  if (!res.ok)
+    throw new Error(body.error ?? `Something went wrong (${res.status})`)
   return body as T
 }
 
@@ -97,11 +104,18 @@ const json = (method: string, body: unknown): RequestInit => ({
 })
 
 export const api = {
-  library: () => (GALLERY ? request<Library>("/data.json", { cache: "no-cache" }) : request<Library>("/api/items")),
-  update: (id: string, patch: Patch) => request("/api/items", json("PATCH", { id, ...patch })),
+  library: () =>
+    GALLERY
+      ? request<Library>("/data.json", { cache: "no-cache" })
+      : request<Library>("/api/items"),
+  update: (id: string, patch: Patch) =>
+    request("/api/items", json("PATCH", { id, ...patch })),
   remove: (id: string) =>
-    request<{ undoId: string }>(`/api/items?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
-  restore: (undoId: string) => request<{ id: string }>("/api/restore", json("POST", { undoId })),
+    request<{ undoId: string }>(`/api/items?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  restore: (undoId: string) =>
+    request<{ id: string }>("/api/restore", json("POST", { undoId })),
   capture: (url: string, tag: string | null) =>
     request<{ ids: string[]; title: string; savedMedia: boolean }>(
       "/api/capture",
@@ -110,9 +124,15 @@ export const api = {
   upload: (file: File, tag: string | null) => {
     const params = new URLSearchParams({ name: file.name })
     if (tag) params.set("tag", tag)
-    return request<{ id: string }>(`/api/upload?${params}`, { method: "POST", body: file })
+    return request<{ id: string }>(`/api/upload?${params}`, {
+      method: "POST",
+      body: file,
+    })
   },
-  renameTag: (from: string, to: string | null) => request("/api/tags", json("PATCH", { from, to })),
+  renameTag: (from: string, to: string | null) =>
+    request("/api/tags", json("PATCH", { from, to })),
+  setComponentTags: (slug: string, tags: string[]) =>
+    request("/api/components", json("PATCH", { slug, tags })),
   reveal: (id?: string) => request("/api/reveal", json("POST", { id })),
   publishState: () => request<PublishState>("/api/publish"),
   publish: () => request<PublishState>("/api/publish", { method: "POST" }),

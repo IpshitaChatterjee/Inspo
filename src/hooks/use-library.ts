@@ -19,6 +19,7 @@ import {
   savedToken,
   sendEdit,
   unlock,
+  withComponentEdits,
   withEdits,
 } from "@/lib/gallery-edits"
 
@@ -59,8 +60,11 @@ export function useLibrary() {
     try {
       const next = await api.library()
       // In the gallery, show edits the Mac hasn't picked up yet.
-      if (GALLERY)
-        next.items = withEdits(next.items, await pendingEdits().catch(() => []))
+      if (GALLERY) {
+        const edits = await pendingEdits().catch(() => [])
+        next.items = withEdits(next.items, edits)
+        next.componentTags = withComponentEdits(next.componentTags ?? {}, edits)
+      }
       const previous = known.current
       const ids = new Set(next.items.map((i) => i.id))
       if (previous) {
@@ -131,6 +135,36 @@ export function useLibrary() {
       }
     },
     [token, refresh]
+  )
+
+  // A component's tags, saved to the iCloud library (or sent as a gallery edit).
+  const updateComponentTags = React.useCallback(
+    async (slug: string, tags: string[]) => {
+      setLibrary(
+        (lib) =>
+          lib && {
+            ...lib,
+            componentTags: { ...lib.componentTags, [slug]: tags },
+          }
+      )
+      if (GALLERY) {
+        await sendGalleryEdits([
+          {
+            itemId: `component:${slug}`,
+            op: "setComponentTags",
+            value: tags.join(","),
+          },
+        ])
+        return
+      }
+      try {
+        await api.setComponentTags(slug, tags)
+      } catch (e) {
+        toast.error((e as Error).message)
+        void refresh()
+      }
+    },
+    [refresh, sendGalleryEdits]
   )
 
   const update = React.useCallback(
@@ -245,6 +279,7 @@ export function useLibrary() {
     publish,
     publishNow,
     canEdit: !GALLERY || !!token,
+    updateComponentTags,
     unlockEditing,
     lockEditing,
     setEditingPassword,
