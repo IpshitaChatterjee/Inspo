@@ -13,6 +13,7 @@ import {
   fillBoard,
   fitBoard,
   layoutOf,
+  swapOnBoard,
   type Board,
   type Cell,
   type Project,
@@ -95,6 +96,12 @@ export function ProjectMoodboard({
           board={shown}
           areas={fit.areas}
           cells={fit.cells}
+          onSwap={
+            readOnly
+              ? undefined
+              : (from, to) =>
+                  change(swapOnBoard(layout, shown, fit.cells, from, to))
+          }
           colors={colors}
           fonts={fonts}
         />

@@ -9,6 +9,7 @@ import {
   areasOf,
   BOARD_DEFAULTS,
   LAYOUTS,
+  tilesOf,
   type Board,
   type Layout,
 } from "@/lib/projects"
@@ -198,7 +199,7 @@ function LayoutOption({
   onSelect: () => void
 }) {
   const tileAreas = new Set(
-    Object.entries(layout.tiles)
+    Object.entries(tilesOf(layout, board))
       .filter(([tile]) => board[tile as keyof typeof layout.tiles])
       .map(([, area]) => area)
   )
@@ -346,7 +347,7 @@ function PictureStrip({
         })}
       </div>
       <p className="text-xs text-muted-foreground">
-        Drag to change the order. Click one to leave it off the board.
+        Drag on the board to swap things around. Click one here to leave it off.
       </p>
     </section>
   )

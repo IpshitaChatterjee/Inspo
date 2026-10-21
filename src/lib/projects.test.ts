@@ -11,6 +11,7 @@ import {
   fitBoard,
   LAYOUTS,
   layoutOf,
+  swapOnBoard,
   type Project,
 } from "@/lib/projects"
 
@@ -216,5 +217,52 @@ describe("fitBoard", () => {
   test("with no pictures the empty spots stay, to show where they go", () => {
     const { cells } = fitBoard(layoutOf("feature"), BOARD_DEFAULTS, [])
     expect(cells.some((c) => c.kind === "picture" && !c.item)).toBe(true)
+  })
+})
+
+describe("swapOnBoard", () => {
+  const layout = layoutOf("feature") // "a a b c", "a a d e", "f g h h"; colours e, type h
+  const pictures = ["1", "2", "3", "4", "5", "6", "7"].map((id) => item(id))
+  // The app lays pictures out in the board's saved order.
+  const ordered = (board: typeof BOARD_DEFAULTS) =>
+    boardPictures(project(pictures.map((p) => p.id)), board, pictures)
+  const at = (board: typeof BOARD_DEFAULTS) =>
+    Object.fromEntries(
+      fillBoard(layout, board, ordered(board)).map((c) => [
+        c.area,
+        c.kind === "picture" ? c.item?.id : c.kind,
+      ])
+    )
+  const apply = (board: typeof BOARD_DEFAULTS, from: string, to: string) => {
+    const cells = fillBoard(layout, board, ordered(board))
+    return { ...board, ...swapOnBoard(layout, board, cells, from, to) }
+  }
+
+  test("two pictures trade places", () => {
+    const after = at(apply(BOARD_DEFAULTS, "a", "g"))
+    expect(after).toMatchObject({ a: "6", g: "1", b: "2", f: "5" })
+  })
+
+  test("the colour and type tiles trade places", () => {
+    const after = at(apply(BOARD_DEFAULTS, "e", "h"))
+    expect(after).toMatchObject({ e: "type", h: "colors", a: "1", g: "6" })
+  })
+
+  test("a picture and a tile trade places, and nothing else moves", () => {
+    const before = at(BOARD_DEFAULTS)
+    const after = at(apply(BOARD_DEFAULTS, "b", "e"))
+    expect(after.b).toBe("colors")
+    expect(after.e).toBe(before.b)
+    for (const area of ["a", "c", "d", "f", "g", "h"])
+      expect(after[area]).toBe(before[area])
+  })
+
+  test("a moved tile stays put when the other tile is switched back on", () => {
+    let board = { ...BOARD_DEFAULTS, type: false }
+    board = apply(board, "a", "e") // colours to a
+    board = apply(board, "a", "h") // colours to h, where type normally sits
+    const after = at({ ...board, type: true })
+    expect(after.h).toBe("colors")
+    expect(Object.values(after).filter((v) => v === "type")).toHaveLength(1)
   })
 })

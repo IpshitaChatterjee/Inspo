@@ -10,6 +10,8 @@ export type Board = {
   type: boolean
   /** 0 shows the main colours; any other number is a shuffled pick. */
   colorSeed: number
+  /** Where you've dragged the tiles to, per layout (otherwise where the layout puts them). */
+  tileSpots: Record<string, Partial<Record<Tile, string>>>
   gap: number
   radius: number
   background: string
@@ -31,6 +33,7 @@ export const BOARD_DEFAULTS: Board = {
   colors: true,
   type: true,
   colorSeed: 0,
+  tileSpots: {},
   gap: 10,
   radius: 12,
   background: "#fbfaf6",
@@ -103,6 +106,11 @@ export type Cell =
   | { area: string; kind: "picture"; item: Item | null }
 
 /** What fills each area: the switched-on tiles where the layout puts them, pictures everywhere else. */
+/** Where each tile sits on this layout: dragged there, or the layout's own spot. */
+export function tilesOf(layout: Layout, board: Board): Record<Tile, string> {
+  return { ...layout.tiles, ...board.tileSpots[layout.id] }
+}
+
 export function fillBoard(
   layout: Layout,
   board: Board,
@@ -110,7 +118,7 @@ export function fillBoard(
 ): Cell[] {
   const shown = pictures.filter((item) => !board.hidden.includes(item.id))
   const tileAt = new Map(
-    (Object.entries(layout.tiles) as [Tile, string][])
+    (Object.entries(tilesOf(layout, board)) as [Tile, string][])
       .filter(([tile]) => board[tile])
       .map(([tile, area]) => [area, tile])
   )
@@ -120,6 +128,76 @@ export function fillBoard(
     if (tile) return { area, kind: tile }
     return { area, kind: "picture", item: shown[next++] ?? null }
   })
+}
+
+/**
+ * What changes when the thing at area `from` is dragged onto area `to`: the
+ * two trade places and everything else stays where it is.
+ */
+export function swapOnBoard(
+  layout: Layout,
+  board: Board,
+  cells: Cell[],
+  from: string,
+  to: string
+): Partial<Board> {
+  const a = cells.find((cell) => cell.area === from)
+  const b = cells.find((cell) => cell.area === to)
+  if (!a || !b || a === b) return {}
+  const itemAt = (cell: Cell) => (cell.kind === "picture" ? cell.item : null)
+  const order = board.order
+
+  if (a.kind === "picture" && b.kind === "picture") {
+    const x = a.item?.id
+    const y = b.item?.id
+    if (!x || !y) return {}
+    const ids = cells.flatMap((cell) => itemAt(cell)?.id ?? [])
+    const all = [...ids, ...order.filter((id) => !ids.includes(id))]
+    return { order: all.map((id) => (id === x ? y : id === y ? x : id)) }
+  }
+
+  // A tile moves: whichever tile was holding its new spot (even a switched-off
+  // one) takes its old spot, so no two tiles ever share one.
+  const spots = { ...tilesOf(layout, board) }
+  const move = (tile: Tile, area: string) => {
+    const old = spots[tile]
+    for (const other of Object.keys(spots) as Tile[])
+      if (other !== tile && spots[other] === area) spots[other] = old
+    spots[tile] = area
+  }
+  const tileSpots = (next: Record<Tile, string>) => ({
+    ...board.tileSpots,
+    [layout.id]: next,
+  })
+
+  if (a.kind !== "picture" && b.kind !== "picture") {
+    move(a.kind, to)
+    return { tileSpots: tileSpots(spots) }
+  }
+
+  // A picture and a tile: the tile takes the picture's spot, the picture
+  // takes the tile's, and every other picture keeps its spot.
+  const [tile, picture] = a.kind === "picture" ? [b, a] : [a, b]
+  const moved = itemAt(picture)
+  if (!moved || tile.kind === "picture") return {}
+  move(tile.kind, picture.area)
+  const tileAreas = new Set(
+    (Object.entries(spots) as [Tile, string][])
+      .filter(([t]) => board[t])
+      .map(([, area]) => area)
+  )
+  const placed = areasOf(layout)
+    .filter((area) => !tileAreas.has(area))
+    .flatMap((area) => {
+      if (area === tile.area) return [moved.id]
+      const cell = cells.find((c) => c.area === area)
+      const id = cell && itemAt(cell)?.id
+      return id ? [id] : []
+    })
+  return {
+    tileSpots: tileSpots(spots),
+    order: [...placed, ...order.filter((id) => !placed.includes(id))],
+  }
 }
 
 type Grid = string[][]

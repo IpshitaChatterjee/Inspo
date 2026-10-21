@@ -28,7 +28,7 @@ and run `npx vite build` first so the page is up to date).
 - A project has two views: **Collected** (its inspos) and **Moodboard**, a ready-made bento of its
   pictures plus colour and type tiles taken from the pictures on the board. With fewer pictures than
   spots, pictures grow to fill the gaps. The panel beside it picks the layout, reorders pictures (drag)
-  or leaves them off (click), switches tiles, shuffles the colours, sets gap, corner radius and
+  or leaves them off (click), switches tiles (drag any picture or tile on the board onto another to swap them), shuffles the colours, sets gap, corner radius and
   background, shuffles the pictures, and exports a PNG.
 - When a project is done, **Archive** it (it moves under _Archived_ in the sidebar) or **Delete** it
   (Undo for a few seconds). Neither touches the inspos themselves.

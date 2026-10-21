@@ -1,5 +1,7 @@
 import * as React from "react"
+import { motion } from "motion/react"
 import { ImageIcon } from "lucide-react"
+import { cn } from "cn"
 
 import { useGoogleFont } from "@/components/font-match"
 import { mediaUrl } from "@/lib/api"
@@ -12,8 +14,16 @@ type BentoBoardProps = {
   cells: Cell[]
   colors: string[]
   fonts: { family: string; weight: number }[]
+  /** Dragging one tile onto another swaps them; left out, the board is still. */
+  onSwap?: (from: string, to: string) => void
   ref?: React.Ref<HTMLDivElement>
 }
+
+// Follows a picture or tile around the board, so a swap animates it to its new spot.
+const keyOf = (cell: Cell) =>
+  cell.kind === "picture"
+    ? (cell.item?.id ?? `empty:${cell.area}`)
+    : `tile:${cell.kind}`
 
 function isDark(hex: string) {
   const n = parseInt(hex.slice(1, 7), 16)
@@ -30,8 +40,28 @@ export function BentoBoard({
   cells,
   colors,
   fonts,
+  onSwap,
   ref,
 }: BentoBoardProps) {
+  const spots = React.useRef(new Map<string, HTMLElement>())
+  const [dragging, setDragging] = React.useState<string | null>(null)
+  const [over, setOver] = React.useState<string | null>(null)
+  const canDrag = (cell: Cell) =>
+    !!onSwap && (cell.kind !== "picture" || !!cell.item)
+
+  // The tile under the pointer, other than the one being dragged.
+  const targetAt = (x: number, y: number, from: string) => {
+    for (const [area, el] of spots.current) {
+      if (area === from) continue
+      const r = el.getBoundingClientRect()
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        const cell = cells.find((c) => c.area === area)
+        return cell && canDrag(cell) ? area : null
+      }
+    }
+    return null
+  }
+
   const dark = isDark(board.background)
   const tone = {
     surface: dark ? "rgba(255,255,255,0.08)" : "#ffffff",
@@ -54,13 +84,49 @@ export function BentoBoard({
       }}
     >
       {cells.map((cell) => (
-        <div
-          key={cell.area}
-          className="relative min-h-0 min-w-0 overflow-hidden"
+        <motion.div
+          key={keyOf(cell)}
+          ref={(el) => {
+            if (el) spots.current.set(cell.area, el)
+            else spots.current.delete(cell.area)
+          }}
+          layout
+          transition={{ type: "spring", stiffness: 380, damping: 34 }}
+          drag={canDrag(cell)}
+          dragSnapToOrigin
+          dragMomentum={false}
+          dragElastic={1}
+          whileDrag={{
+            scale: 1.04,
+            zIndex: 10,
+            boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
+          }}
+          onDragStart={() => setDragging(cell.area)}
+          onDrag={(e) => {
+            const { clientX, clientY } = e as PointerEvent
+            setOver(targetAt(clientX, clientY, cell.area))
+          }}
+          onDragEnd={(e) => {
+            const { clientX, clientY } = e as PointerEvent
+            const target = targetAt(clientX, clientY, cell.area)
+            setDragging(null)
+            setOver(null)
+            if (target) onSwap?.(cell.area, target)
+          }}
+          className={cn(
+            "relative min-h-0 min-w-0 overflow-hidden",
+            canDrag(cell) && "cursor-grab active:cursor-grabbing",
+            over === cell.area &&
+              "ring-3 ring-primary ring-offset-2 ring-offset-transparent",
+            dragging &&
+              dragging !== cell.area &&
+              over !== cell.area &&
+              "opacity-80"
+          )}
           style={{ gridArea: cell.area, borderRadius: board.radius }}
         >
           <CellContent cell={cell} colors={colors} fonts={fonts} tone={tone} />
-        </div>
+        </motion.div>
       ))}
     </div>
   )
