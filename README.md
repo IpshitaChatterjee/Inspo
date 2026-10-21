@@ -23,7 +23,7 @@ and run `npx vite build` first so the page is up to date).
 
 ## Projects and moodboards
 
-- Press **Select** (or the round tick on a card), pick inspos, then **Add to project** → an existing
+- Tap the round tick on a card (it shows on hover; always on phones) to pick inspos, then **Add to project** → an existing
   project or **New project…**. An opened inspo also lists its projects, and can be added or taken out.
 - A project has two views: **Collected** (its inspos) and **Moodboard**, a ready-made bento of its
   pictures plus colour and type tiles taken from the pictures on the board. With fewer pictures than

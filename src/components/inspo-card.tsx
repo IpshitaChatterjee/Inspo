@@ -25,7 +25,7 @@ type InspoCardProps = {
 /** Picking several inspos at once (to add to a project). */
 export type Selection = {
   selected: Set<string>
-  /** While something is selected (or Select is on), a click selects instead of opening. */
+  /** While something is selected, a click selects instead of opening. */
   active: boolean
   toggle: (id: string) => void
 }
@@ -131,7 +131,8 @@ export function InspoCard({
             !selected &&
               (selection.active
                 ? "opacity-100"
-                : "opacity-0 group-hover/select:opacity-100")
+                : // Touch screens can't hover, so the tick stays in view there.
+                  "opacity-0 group-hover/select:opacity-100 pointer-coarse:opacity-100")
           )}
         >
           <CheckIcon className="size-3.5" strokeWidth={3} />

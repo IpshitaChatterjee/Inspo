@@ -1,7 +1,6 @@
 import * as React from "react"
 import { AnimatePresence, LayoutGroup, motion } from "motion/react"
 import {
-  CheckCheckIcon,
   ImagePlusIcon,
   MoonIcon,
   PlusIcon,
@@ -164,10 +163,8 @@ export function App() {
   const [help, setHelp] = React.useState(false)
   const [projectTab, setProjectTab] = React.useState<ProjectTab>("collected")
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
-  const [selecting, setSelecting] = React.useState(false)
   const clearSelection = React.useCallback(() => {
     setSelected(new Set())
-    setSelecting(false)
   }, [])
   const searchRef = React.useRef<HTMLInputElement>(null)
 
@@ -233,7 +230,7 @@ export function App() {
         ? undefined
         : {
             selected,
-            active: selecting || selected.size > 0,
+            active: selected.size > 0,
             toggle: (id) =>
               setSelected((current) => {
                 const next = new Set(current)
@@ -241,7 +238,7 @@ export function App() {
                 return next
               }),
           },
-    [inComponents, selected, selecting]
+    [inComponents, selected]
   )
   const selectedIds = [...selected]
   const named = (n: number) => `${n} ${n === 1 ? "inspo" : "inspos"}`
@@ -452,21 +449,6 @@ export function App() {
                   />
                 )}
                 <ThemeToggle />
-                {selection && (
-                  <Button
-                    variant={selection.active ? "secondary" : "ghost"}
-                    className="rounded-full"
-                    aria-pressed={selection.active}
-                    onClick={() =>
-                      selection.active ? clearSelection() : setSelecting(true)
-                    }
-                  >
-                    <CheckCheckIcon />
-                    <span className="hidden sm:inline">
-                      {selection.active ? "Done" : "Select"}
-                    </span>
-                  </Button>
-                )}
                 {!GALLERY && !inComponents && (
                   <Button
                     onClick={() => setAdding(true)}
