@@ -14,10 +14,13 @@ import {
 } from "@/lib/projects"
 import type { Control, ControlValue } from "@/library/types"
 
-const STYLE_CONTROLS: Control[] = [
+const COLOR_TILE: Control[] = [
   { key: "colors", label: "Colour tile", type: "toggle", default: true },
+]
+const TYPE_TILE: Control[] = [
   { key: "type", label: "Type tile", type: "toggle", default: true },
-  { key: "title", label: "Title tile", type: "toggle", default: true },
+]
+const STYLE_CONTROLS: Control[] = [
   {
     key: "gap",
     label: "Gap",
@@ -57,6 +60,7 @@ type BentoPanelProps = {
   exporting: boolean
   onChange: (patch: Partial<Board>) => void
   onShuffle: () => void
+  onShuffleColors: () => void
   onExport: () => void
 }
 
@@ -69,8 +73,10 @@ export function BentoPanel({
   exporting,
   onChange,
   onShuffle,
+  onShuffleColors,
   onExport,
 }: BentoPanelProps) {
+  const set = (key: string, value: ControlValue) => onChange({ [key]: value })
   const exportButton = (
     <Button
       variant={readOnly ? "default" : "outline"}
@@ -108,29 +114,61 @@ export function BentoPanel({
         onChange={onChange}
       />
 
-      <div className="flex flex-col gap-1.5">
+      <section className="flex flex-col gap-3">
         <ComponentControls
-          controls={STYLE_CONTROLS}
-          values={{
-            colors: board.colors,
-            type: board.type,
-            title: board.title,
-            gap: board.gap,
-            radius: board.radius,
-            background: board.background,
-          }}
-          onChange={(key, value: ControlValue) => onChange({ [key]: value })}
+          controls={COLOR_TILE}
+          values={{ colors: board.colors }}
+          onChange={set}
         />
-        {(missing.colors || missing.type) && (
-          <p className="text-xs text-muted-foreground">
-            {missing.colors && missing.type
-              ? "No colours or type found in these pictures yet."
-              : missing.colors
-                ? "No colours found in these pictures yet."
-                : "No type found in these pictures yet."}
+        {board.colors &&
+          (missing.colors ? (
+            <p className="-mt-1 text-xs text-muted-foreground">
+              No colours found in the pictures on the board yet.
+            </p>
+          ) : (
+            <div className="-mt-1 flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={onShuffleColors}
+              >
+                <ShuffleIcon />
+                Shuffle colours
+              </Button>
+              {board.colorSeed !== 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="rounded-full text-muted-foreground"
+                  onClick={() => onChange({ colorSeed: 0 })}
+                >
+                  Main colours
+                </Button>
+              )}
+            </div>
+          ))}
+        <ComponentControls
+          controls={TYPE_TILE}
+          values={{ type: board.type }}
+          onChange={set}
+        />
+        {board.type && missing.type && (
+          <p className="-mt-1 text-xs text-muted-foreground">
+            No type found in the pictures on the board yet.
           </p>
         )}
-      </div>
+      </section>
+
+      <ComponentControls
+        controls={STYLE_CONTROLS}
+        values={{
+          gap: board.gap,
+          radius: board.radius,
+          background: board.background,
+        }}
+        onChange={set}
+      />
 
       <div className="flex gap-2">
         <Button
@@ -139,7 +177,7 @@ export function BentoPanel({
           onClick={onShuffle}
         >
           <ShuffleIcon />
-          Shuffle
+          Shuffle pictures
         </Button>
         {exportButton}
       </div>

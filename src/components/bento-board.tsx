@@ -3,15 +3,13 @@ import { ImageIcon } from "lucide-react"
 
 import { useGoogleFont } from "@/components/font-match"
 import { mediaUrl } from "@/lib/api"
-import { fillBoard, layoutOf, type Board, type Cell } from "@/lib/projects"
-import type { Item } from "@/lib/api"
+import type { Board, Cell } from "@/lib/projects"
 
 type BentoBoardProps = {
-  name: string
-  /** Everything in the project, links included. */
-  count: number
   board: Board
-  pictures: Item[]
+  /** The grid areas and what fills them, from fitBoard. */
+  areas: string[]
+  cells: Cell[]
   colors: string[]
   fonts: { family: string; weight: number }[]
   ref?: React.Ref<HTMLDivElement>
@@ -23,20 +21,17 @@ function isDark(hex: string) {
   return 0.299 * r + 0.587 * g + 0.114 * b < 140
 }
 
-// The moodboard: a fixed bento of the project's pictures plus colour, type
-// and title tiles. Text is sized to the board's width (cqw), so it looks the
+// The moodboard: a bento of the project's pictures plus colour and type
+// tiles. Text is sized to the board's width (cqw), so it looks the
 // same on screen, on a phone and in the exported PNG.
 export function BentoBoard({
-  name,
-  count,
   board,
-  pictures,
+  areas,
+  cells,
   colors,
   fonts,
   ref,
 }: BentoBoardProps) {
-  const layout = layoutOf(board.layout)
-  const cells = fillBoard(layout, board, pictures)
   const dark = isDark(board.background)
   const tone = {
     surface: dark ? "rgba(255,255,255,0.08)" : "#ffffff",
@@ -49,7 +44,7 @@ export function BentoBoard({
       ref={ref}
       className="[container-type:inline-size] grid aspect-[16/10] w-full overflow-hidden"
       style={{
-        gridTemplateAreas: layout.areas.map((row) => `"${row}"`).join(" "),
+        gridTemplateAreas: areas.map((row) => `"${row}"`).join(" "),
         gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
         gridTemplateRows: "repeat(3, minmax(0, 1fr))",
         gap: board.gap,
@@ -64,14 +59,7 @@ export function BentoBoard({
           className="relative min-h-0 min-w-0 overflow-hidden"
           style={{ gridArea: cell.area, borderRadius: board.radius }}
         >
-          <CellContent
-            cell={cell}
-            name={name}
-            count={count}
-            colors={colors}
-            fonts={fonts}
-            tone={tone}
-          />
+          <CellContent cell={cell} colors={colors} fonts={fonts} tone={tone} />
         </div>
       ))}
     </div>
@@ -82,15 +70,11 @@ type Tone = { surface: string; ink: string; muted: string }
 
 function CellContent({
   cell,
-  name,
-  count,
   colors,
   fonts,
   tone,
 }: {
   cell: Cell
-  name: string
-  count: number
   colors: string[]
   fonts: { family: string; weight: number }[]
   tone: Tone
@@ -110,23 +94,6 @@ function CellContent({
           style={{ background: tone.surface, color: tone.muted }}
         >
           <ImageIcon className="size-[2.2cqw] opacity-50" />
-        </div>
-      )
-    case "title":
-      return (
-        <div
-          className="flex size-full flex-col justify-end p-[1.6cqw]"
-          style={{
-            background: tone.ink,
-            color: tone.surface === "#ffffff" ? "#fbfaf6" : "#1c1c1a",
-          }}
-        >
-          <span className="font-heading text-[2.4cqw] leading-[1.05] font-semibold tracking-tight [overflow-wrap:anywhere]">
-            {name}
-          </span>
-          <span className="mt-[0.5cqw] text-[1.05cqw] opacity-60">
-            {count} {count === 1 ? "reference" : "references"}
-          </span>
         </div>
       )
     case "colors":

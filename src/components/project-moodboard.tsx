@@ -11,8 +11,10 @@ import {
   boardOf,
   boardPictures,
   fillBoard,
+  fitBoard,
   layoutOf,
   type Board,
+  type Cell,
   type Project,
 } from "@/lib/projects"
 
@@ -34,16 +36,31 @@ export function ProjectMoodboard({
   const [exporting, setExporting] = React.useState(false)
   const board = boardOf(project)
   const pictures = boardPictures(project, board, items)
-  const colors = boardColors(pictures)
-  const fonts = boardFonts(pictures)
+  const layout = layoutOf(board.layout)
 
+  // Colours and type come from the pictures on the board, not the whole project.
+  const readTiles = (cells: Cell[]) => {
+    const placed = cells.flatMap((cell) =>
+      cell.kind === "picture" && cell.item ? [cell.item] : []
+    )
+    return {
+      colors: boardColors(placed, 8, board.colorSeed),
+      fonts: boardFonts(placed),
+    }
+  }
+  let fit = fitBoard(layout, board, pictures)
+  let { colors, fonts } = readTiles(fit.cells)
   // A tile with nothing to show steps aside for a picture.
   const shown: Board = {
     ...board,
     colors: board.colors && colors.length > 0,
     type: board.type && fonts.length > 0,
   }
-  const spots = fillBoard(layoutOf(shown.layout), shown, []).filter(
+  if (shown.colors !== board.colors || shown.type !== board.type) {
+    fit = fitBoard(layout, shown, pictures)
+    ;({ colors, fonts } = readTiles(fit.cells))
+  }
+  const spots = fillBoard(layout, shown, []).filter(
     (cell) => cell.kind === "picture"
   ).length
 
@@ -75,10 +92,9 @@ export function ProjectMoodboard({
       <div className="min-w-0 flex-1 lg:sticky lg:top-20">
         <BentoBoard
           ref={boardRef}
-          name={project.name}
-          count={project.items.length}
           board={shown}
-          pictures={pictures}
+          areas={fit.areas}
+          cells={fit.cells}
           colors={colors}
           fonts={fonts}
         />
@@ -101,6 +117,9 @@ export function ProjectMoodboard({
           exporting={exporting}
           onChange={change}
           onShuffle={shuffle}
+          onShuffleColors={() =>
+            change({ colorSeed: 1 + Math.floor(Math.random() * 2 ** 31) })
+          }
           onExport={() => void exportPng()}
         />
       </aside>

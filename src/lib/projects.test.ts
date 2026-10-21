@@ -8,6 +8,7 @@ import {
   boardFonts,
   boardPictures,
   fillBoard,
+  fitBoard,
   LAYOUTS,
   layoutOf,
   type Project,
@@ -89,20 +90,20 @@ describe("fillBoard", () => {
 
   test("puts tiles where the layout says and pictures elsewhere, in order", () => {
     const cells = fillBoard(layout, BOARD_DEFAULTS, pictures)
-    expect(cells.find((c) => c.area === "c")?.kind).toBe("title")
+    expect(cells.find((c) => c.area === "e")?.kind).toBe("colors")
     const filled = cells.flatMap((c) =>
       c.kind === "picture" && c.item ? [c.item.id] : []
     )
-    expect(filled).toEqual(["1", "2", "3", "4", "5"])
+    expect(filled).toEqual(["1", "2", "3", "4", "5", "6"])
   })
 
   test("a switched-off tile hands its area to a picture", () => {
     const cells = fillBoard(
       layout,
-      { ...BOARD_DEFAULTS, title: false },
+      { ...BOARD_DEFAULTS, colors: false },
       pictures
     )
-    expect(cells.find((c) => c.area === "c")?.kind).toBe("picture")
+    expect(cells.find((c) => c.area === "e")?.kind).toBe("picture")
     expect(cells.filter((c) => c.kind === "picture" && c.item)).toHaveLength(6)
   })
 
@@ -127,6 +128,22 @@ describe("boardColors", () => {
     expect(boardColors(pictures)).toEqual(["#ff0000", "#00ff00", "#0000ff"])
   })
 
+  test("a seed gives another pick of the same colours, the same way every time", () => {
+    // Twelve clearly different colours, so none get merged.
+    const hex = (n: number) => n.toString(16).padStart(2, "0")
+    const palette = Array.from(
+      { length: 12 },
+      (_, i) => `#${hex(i * 21)}${hex((i % 3) * 120)}${hex(255 - i * 21)}`
+    )
+    const pictures = [item("1", { palette })]
+    const best = boardColors(pictures)
+    const shuffled = boardColors(pictures, 8, 7)
+    expect(shuffled).toHaveLength(8)
+    expect(shuffled).not.toEqual(best)
+    expect(boardColors(pictures, 8, 7)).toEqual(shuffled)
+    for (const hex of shuffled) expect(palette).toContain(hex)
+  })
+
   test("stops at the maximum", () => {
     const pictures = [item("1", { palette: ["#000000", "#ffffff", "#ff0000"] })]
     expect(boardColors(pictures, 2)).toHaveLength(2)
@@ -144,5 +161,60 @@ describe("boardFonts", () => {
       "Inter",
       "Fraunces",
     ])
+  })
+})
+
+describe("fitBoard", () => {
+  const pictures = (n: number) =>
+    Array.from({ length: n }, (_, i) => item(String(i)))
+
+  // Each area must be one solid rectangle, or the browser drops the whole grid.
+  const isRectangle = (areas: string[], area: string) => {
+    const spots = areas.flatMap((row, r) =>
+      row.split(" ").flatMap((name, c) => (name === area ? [[r, c]] : []))
+    )
+    const rows = spots.map(([r]) => r)
+    const cols = spots.map(([, c]) => c)
+    const height = Math.max(...rows) - Math.min(...rows) + 1
+    const width = Math.max(...cols) - Math.min(...cols) + 1
+    return spots.length === height * width
+  }
+
+  test("never leaves an empty spot, whatever the layout, tiles or count", () => {
+    for (const layout of LAYOUTS) {
+      for (let mask = 0; mask < 4; mask++) {
+        const board = {
+          ...BOARD_DEFAULTS,
+          layout: layout.id,
+          colors: !!(mask & 1),
+          type: !!(mask & 2),
+        }
+        for (let n = 1; n <= 10; n++) {
+          const { areas, cells } = fitBoard(layout, board, pictures(n))
+          const where = `${layout.id} mask ${mask} with ${n}`
+          expect(
+            cells.filter((c) => c.kind === "picture" && !c.item),
+            where
+          ).toEqual([])
+          for (const cell of cells)
+            expect(isRectangle(areas, cell.area), where).toBe(true)
+          const named = new Set(areas.join(" ").split(" "))
+          expect([...named].sort(), where).toEqual(
+            cells.map((c) => c.area).sort()
+          )
+        }
+      }
+    }
+  })
+
+  test("a full board is left as the layout draws it", () => {
+    const layout = layoutOf("feature")
+    const { areas } = fitBoard(layout, BOARD_DEFAULTS, pictures(10))
+    expect(areas).toEqual(layout.areas)
+  })
+
+  test("with no pictures the empty spots stay, to show where they go", () => {
+    const { cells } = fitBoard(layoutOf("feature"), BOARD_DEFAULTS, [])
+    expect(cells.some((c) => c.kind === "picture" && !c.item)).toBe(true)
   })
 })
