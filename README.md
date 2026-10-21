@@ -60,6 +60,21 @@ restarts, or right away with the refresh button under Shared gallery in Inspo.
 An image you upload in the controls becomes `/your-image.jpg` in the copied code (the built-in gradient still
 shows until you add that file). `npm test` checks every component against all of this.
 
+### Paper Shaders
+
+All 30 shaders from [Paper Shaders](https://shaders.paper.design) (Apache 2.0, by Paper) are in Components as
+`src/library/paper-*`. They're generated, not hand-written: `scripts/generate-paper-components.ts` reads the
+setting descriptions and ranges from Paper's type files and the defaults and presets from Paper's package. After
+upgrading `@paper-design/shaders-react` (it's pinned to an exact version, as Paper asks until their 1.0), run:
+
+```sh
+node scripts/generate-paper-components.ts && npx prettier --write "src/library/paper-*"
+```
+
+These are the one exception to "imports only react": their copied code imports `@paper-design/shaders-react` and
+starts with the exact install line (`npm test` checks the line matches the installed version). Image filters and
+logo animations come with sample pictures drawn in code; copied code points them at `/your-image.jpg`.
+
 ## Where things live
 
 - `Inspo/` in iCloud Drive: your images and videos.

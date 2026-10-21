@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ImageUpIcon } from "lucide-react"
+import { ImageUpIcon, PlusIcon, XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -154,6 +154,30 @@ function ControlRow({
           />
         </div>
       )
+    case "colors":
+      return (
+        <div className="flex flex-col gap-2">
+          {label}
+          <ColorsField
+            control={control}
+            labelId={labelId}
+            value={String(value)}
+            onChange={onChange}
+          />
+        </div>
+      )
+    case "picture":
+      return (
+        <div className="flex flex-col gap-2">
+          {label}
+          <PictureField
+            control={control}
+            labelId={labelId}
+            value={String(value)}
+            onChange={onChange}
+          />
+        </div>
+      )
   }
 }
 
@@ -163,7 +187,8 @@ function formatNumber(n: number, step: number) {
   return String(Number(n.toFixed(decimals)))
 }
 
-const FULL_HEX = /^#?([0-9a-f]{6})$/i
+// Six digits, or eight when the colour is partly see-through.
+const FULL_HEX = /^#?([0-9a-f]{6}(?:[0-9a-f]{2})?)$/i
 const SHORT_HEX = /^#?([0-9a-f])([0-9a-f])([0-9a-f])$/i
 
 function toHex(text: string): string | null {
@@ -201,24 +226,19 @@ function ColorField({
 
   return (
     <div className="flex items-center gap-2">
-      <label className="relative block size-8 shrink-0 cursor-pointer overflow-hidden rounded-md shadow-xs ring-1 ring-foreground/15 has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
-        <span className="absolute inset-0" style={{ backgroundColor: value }} />
-        <input
-          type="color"
-          aria-labelledby={labelId}
-          value={toHex(value) ?? "#000000"}
-          onChange={(e) => {
-            setDraft(e.target.value)
-            commit(e.target.value)
-          }}
-          className="absolute inset-0 size-full cursor-pointer opacity-0"
-        />
-      </label>
+      <Swatch
+        value={value}
+        labelId={labelId}
+        onChange={(hex) => {
+          setDraft(hex)
+          commit(hex)
+        }}
+      />
       <Input
         aria-label={`${control.label} hex code`}
         value={draft}
         spellCheck={false}
-        maxLength={7}
+        maxLength={9}
         onChange={(e) => {
           setDraft(e.target.value)
           // Short codes like #f00 wait for the box to lose focus, so typing
@@ -238,7 +258,155 @@ function ColorField({
   )
 }
 
+// The system colour picker on a swatch. It only knows solid colours, so a
+// see-through colour keeps its transparency when the picker changes it.
+function Swatch({
+  value,
+  labelId,
+  label,
+  onChange,
+}: {
+  value: string
+  labelId?: string
+  label?: string
+  onChange: (hex: string) => void
+}) {
+  const alpha = value.length === 9 ? value.slice(7) : ""
+  return (
+    <label className="relative block size-8 shrink-0 cursor-pointer overflow-hidden rounded-md bg-[repeating-conic-gradient(#d4d4d4_0%_25%,#fff_0%_50%)] bg-size-[8px_8px] shadow-xs ring-1 ring-foreground/15 has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
+      <span className="absolute inset-0" style={{ backgroundColor: value }} />
+      <input
+        type="color"
+        aria-labelledby={labelId}
+        aria-label={label}
+        value={(toHex(value) ?? "#000000").slice(0, 7)}
+        onChange={(e) => onChange(`${e.target.value}${alpha}`)}
+        className="absolute inset-0 size-full cursor-pointer opacity-0"
+      />
+    </label>
+  )
+}
+
+// A short list of colours: change each, remove one, or add another up to the limit.
+function ColorsField({
+  control,
+  labelId,
+  value,
+  onChange,
+}: RowProps<"colors"> & { value: string; onChange: (value: string) => void }) {
+  const colors = value.split(",").filter(Boolean)
+  const set = (next: string[]) => onChange(next.join(","))
+  return (
+    <div
+      role="group"
+      aria-labelledby={labelId}
+      className="flex flex-wrap items-center gap-2"
+    >
+      {colors.map((color, i) => (
+        <span key={i} className="group/swatch relative">
+          <Swatch
+            value={color}
+            label={`Colour ${i + 1}, ${color}`}
+            onChange={(hex) => set(colors.map((c, j) => (j === i ? hex : c)))}
+          />
+          {colors.length > 1 && (
+            <button
+              type="button"
+              aria-label={`Remove colour ${i + 1}`}
+              onClick={() => set(colors.filter((_, j) => j !== i))}
+              className="absolute -top-1.5 -right-1.5 hidden size-4 items-center justify-center rounded-full bg-foreground text-background group-hover/swatch:flex focus-visible:flex"
+            >
+              <XIcon className="size-2.5" />
+            </button>
+          )}
+        </span>
+      ))}
+      {colors.length < control.max && (
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Add a colour"
+          onClick={() => set([...colors, colors.at(-1) ?? "#ffffff"])}
+        >
+          <PlusIcon />
+        </Button>
+      )}
+    </div>
+  )
+}
+
 const UPLOAD = "__upload__"
+
+// A built-in sample picture, or a file of your own.
+function PictureField({
+  control,
+  labelId,
+  value,
+  onChange,
+}: RowProps<"picture"> & { value: string; onChange: (value: string) => void }) {
+  const fileRef = React.useRef<HTMLInputElement>(null)
+  const isUpload = value.startsWith("blob:")
+
+  // The file's temporary address is released once it's replaced or the view closes.
+  React.useEffect(() => {
+    if (!isUpload) return
+    return () => URL.revokeObjectURL(value)
+  }, [isUpload, value])
+
+  const items = [
+    ...(isUpload
+      ? [
+          {
+            value: UPLOAD,
+            label: <Option background={`url("${value}")`} name="Your image" />,
+          },
+        ]
+      : []),
+    ...control.samples.map((sample) => ({
+      value: sample.value,
+      label: (
+        <Option background={`url("${sample.value}")`} name={sample.label} />
+      ),
+    })),
+  ]
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        items={items}
+        value={isUpload ? UPLOAD : value}
+        onValueChange={(next) => next && next !== UPLOAD && onChange(next)}
+      >
+        <SelectTrigger aria-labelledby={labelId} className="min-w-0 flex-1">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button variant="outline" onClick={() => fileRef.current?.click()}>
+        <ImageUpIcon />
+        Choose file…
+      </Button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ""
+          if (!file || !file.type.startsWith("image/")) return
+          onChange(URL.createObjectURL(file))
+        }}
+      />
+    </div>
+  )
+}
 
 // `url("blob:…"), <gradient>` → the gradient, which shows if the photo doesn't.
 function gradientOf(value: string) {

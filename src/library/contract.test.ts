@@ -11,6 +11,12 @@ import {
   type ControlValue,
 } from "./types"
 
+// Packages a copied component may import, with the exact version to install.
+const ALLOWED_PACKAGES: Record<string, string> = {
+  "@paper-design/shaders-react": "0.0.82",
+}
+const HEX = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/
+
 // Read separately from the registry so the folder check doesn't trust it.
 const metaFiles = import.meta.glob<{ default: ComponentMeta }>("./*/meta.tsx", {
   eager: true,
@@ -40,6 +46,10 @@ function changedValue(c: Control): ControlValue {
       return "Changed text"
     case "image":
       return c.gradients.at(-1)!.value
+    case "colors":
+      return "#123456,#654321"
+    case "picture":
+      return "/changed.jpg"
   }
 }
 
@@ -145,10 +155,17 @@ for (const entry of library) {
       expect(folders).toEqual([`./${entry.meta.slug}/meta.tsx`])
     })
 
-    test("copied file starts with use client and only imports react", () => {
+    // React, plus approved packages the file names with an exact install line.
+    test("copied file starts with use client and only imports what it says to install", () => {
       expect(entry.source.trimStart().startsWith(`"use client"`)).toBe(true)
       const { imports } = copyRuleBreaks(entry.source)
-      for (const from of imports) expect(from).toBe("react")
+      for (const from of imports) {
+        if (from === "react") continue
+        expect(Object.keys(ALLOWED_PACKAGES)).toContain(from)
+        expect(entry.source).toContain(
+          `// Needs: npm i ${from}@${ALLOWED_PACKAGES[from]}`
+        )
+      }
     })
 
     test("styles inline, no Tailwind classes", () => {
@@ -181,6 +198,15 @@ for (const entry of library) {
           expect(c.options.map((o) => o.value)).toContain(c.default)
         } else if (c.type === "image") {
           expect(c.gradients.map((g) => g.value)).toContain(c.default)
+        } else if (c.type === "picture") {
+          expect(c.samples.map((s) => s.value)).toContain(c.default)
+        } else if (c.type === "colors") {
+          const colors = c.default.split(",")
+          expect(colors.length).toBeGreaterThan(0)
+          expect(colors.length).toBeLessThanOrEqual(c.max)
+          for (const color of colors) expect(color).toMatch(HEX)
+        } else if (c.type === "color") {
+          expect(c.default).toMatch(HEX)
         } else if (c.type === "slider") {
           expect(c.default).toBeGreaterThanOrEqual(c.min)
           expect(c.default).toBeLessThanOrEqual(c.max)
@@ -228,8 +254,9 @@ for (const entry of library) {
     test("prompt never contains an uploaded file's address", () => {
       const values = defaultValues(entry.meta.controls)
       for (const c of entry.meta.controls) {
-        if (c.type !== "image") continue
-        values[c.key] = `url("blob:http://x/1"), ${c.default}`
+        if (c.type === "image")
+          values[c.key] = `url("blob:http://x/1"), ${c.default}`
+        if (c.type === "picture") values[c.key] = "blob:http://x/2"
       }
       const prompt = entry.meta.prompt(forCopy(values, entry.meta.controls))
       expect(prompt).not.toContain("blob:")
@@ -238,9 +265,11 @@ for (const entry of library) {
 
     test("prompt mentions every current value", () => {
       const values = defaultValues(entry.meta.controls)
-      const prompt = entry.meta.prompt(values)
+      const prompt = entry.meta.prompt(forCopy(values, entry.meta.controls))
       for (const c of entry.meta.controls) {
-        if (c.type !== "image") expect(prompt).toContain(String(values[c.key]))
+        if (c.type !== "image" && c.type !== "picture") {
+          expect(prompt).toContain(String(values[c.key]))
+        }
       }
     })
 
@@ -248,7 +277,7 @@ for (const entry of library) {
     // the first test above already checks they never print an uploaded file.
     test("prompt mentions every changed value", () => {
       for (const c of entry.meta.controls) {
-        if (c.type === "image") continue
+        if (c.type === "image" || c.type === "picture") continue
         const values = defaultValues(entry.meta.controls)
         values[c.key] = changedValue(c)
         expect(entry.meta.prompt(values)).toContain(String(values[c.key]))
@@ -256,6 +285,33 @@ for (const entry of library) {
     })
   })
 }
+
+// The install line in copied code must name what the app actually runs.
+test("approved packages match the versions installed", async () => {
+  const pkg = (await import("../../package.json")).default as {
+    dependencies: Record<string, string>
+  }
+  for (const [name, version] of Object.entries(ALLOWED_PACKAGES)) {
+    expect(pkg.dependencies[name]).toBe(version)
+  }
+})
+
+test("presets only set the component's own controls, with valid values", () => {
+  for (const entry of library) {
+    for (const preset of entry.meta.presets ?? []) {
+      for (const [key, value] of Object.entries(preset.values)) {
+        const control = entry.meta.controls.find((c) => c.key === key)
+        expect(
+          control,
+          `${entry.meta.slug} preset ${preset.name}: ${key}`
+        ).toBeDefined()
+        if (control?.type === "select") {
+          expect(control.options.map((o) => o.value)).toContain(value)
+        }
+      }
+    }
+  }
+})
 
 test("library has at least one component", () => {
   expect(library.length).toBeGreaterThan(0)

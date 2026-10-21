@@ -5,6 +5,10 @@ export const DEFAULTS_END = "// @inspo-defaults-end"
 
 const PLACEHOLDER_NOTE =
   "// Replace /your-image.jpg with your image; the gradient shows until you do."
+const PICTURE_NOTE = "// Replace /your-image.jpg with your own image."
+
+// Built-in samples and uploads only exist inside the app.
+const isLocalPicture = (value: string) => /^(blob|data):/.test(value)
 
 // An uploaded file lives at a blob: or data: URL that means nothing outside the
 // app, so it becomes a placeholder path and keeps only the gradient part.
@@ -23,6 +27,9 @@ export function forCopy(values: Values, controls: Control[]): Values {
     if (control.type === "image" && typeof value === "string") {
       const placeholder = placeholderForUpload(value)
       if (placeholder) out[control.key] = placeholder
+    }
+    if (control.type === "picture" && typeof value === "string" && isLocalPicture(value)) {
+      out[control.key] = "/your-image.jpg"
     }
   }
   return out
@@ -44,7 +51,7 @@ export function bakeValues(
   for (const control of controls) {
     const value: ControlValue = copied[control.key] ?? control.default
     if (value !== (values[control.key] ?? control.default)) {
-      lines.push(`  ${PLACEHOLDER_NOTE}`)
+      lines.push(`  ${control.type === "picture" ? PICTURE_NOTE : PLACEHOLDER_NOTE}`)
     }
     lines.push(`  ${control.key}: ${JSON.stringify(value)},`)
   }

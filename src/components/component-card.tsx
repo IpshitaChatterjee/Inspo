@@ -2,6 +2,7 @@ import * as React from "react"
 import { motion } from "motion/react"
 
 import { ComponentBoundary } from "@/components/component-boundary"
+import { useLiveSlot } from "@/lib/live-slots"
 import type { LibraryEntry } from "@/library"
 import { defaultValues } from "@/library/types"
 
@@ -13,9 +14,10 @@ type ComponentCardProps = {
   onOpen: (entry: LibraryEntry) => void
 }
 
-// How much wider the live preview is laid out than the card, so the sample
-// headline sits in the card the way it does in the full view.
-const PREVIEW_SCALE = 2.5
+// How much wider a preview with a sample headline is laid out than the card, so
+// the headline sits in the card the way it does in the full view. Previews
+// without one draw at card size, which keeps live shaders light.
+const DEMO_SCALE = 2.5
 
 export function ComponentCard({
   entry,
@@ -27,14 +29,15 @@ export function ComponentCard({
   const [onScreen, setOnScreen] = React.useState(false)
   const [Loaded, setLoaded] = React.useState<LoadedComponent | null>(null)
   const requested = React.useRef(false)
+  const live = useLiveSlot(onScreen)
+  const previewScale = meta.demo ? DEMO_SCALE : 1
 
-  // Only components near the screen are mounted; the rest stay a plain block.
+  // Only components on screen are mounted; the rest stay a plain block.
   React.useEffect(() => {
     const el = ref.current
     if (!el) return
-    const observer = new IntersectionObserver(
-      ([e]) => setOnScreen(e.isIntersecting),
-      { rootMargin: "200px" }
+    const observer = new IntersectionObserver(([e]) =>
+      setOnScreen(e.isIntersecting)
     )
     observer.observe(el)
     return () => observer.disconnect()
@@ -75,7 +78,7 @@ export function ComponentCard({
         aria-label={meta.title}
         className="group/card relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted text-left ring-1 ring-foreground/5 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] outline-none hover:scale-[1.02] focus-visible:ring-3 focus-visible:ring-ring/60"
       >
-        {onScreen && Loaded && (
+        {live && Loaded && (
           <div
             aria-hidden
             // Nothing inside the preview can be focused or clicked, so a
@@ -83,9 +86,9 @@ export function ComponentCard({
             inert
             className="pointer-events-none absolute top-0 left-0 origin-top-left"
             style={{
-              width: `${PREVIEW_SCALE * 100}%`,
-              height: `${PREVIEW_SCALE * 100}%`,
-              transform: `scale(${1 / PREVIEW_SCALE})`,
+              width: `${previewScale * 100}%`,
+              height: `${previewScale * 100}%`,
+              transform: `scale(${1 / previewScale})`,
             }}
           >
             <ComponentBoundary fallback={null}>

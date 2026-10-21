@@ -7,6 +7,13 @@ import { ComponentBoundary } from "@/components/component-boundary"
 import { ComponentControls } from "@/components/component-controls"
 import { DetailNav, DetailShell, Field } from "@/components/detail-shell"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { TagInput } from "@/components/tag-input"
 import { useCanEdit } from "@/lib/gallery-edits"
@@ -120,6 +127,9 @@ export function ComponentDetail({
             setValues((current) => ({ ...current, [key]: value }))
           }
           onReset={() => setValues(defaultValues(meta.controls))}
+          onPreset={(preset) =>
+            setValues((current) => ({ ...current, ...preset }))
+          }
           onClose={onClose}
           onStep={onStep}
         />
@@ -130,6 +140,7 @@ export function ComponentDetail({
 
 type ComponentPanelProps = {
   entry: LibraryEntry
+  onPreset: (values: Values) => void
   tagSuggestions: string[]
   onTagsChange: (slug: string, tags: string[]) => void
   values: Values
@@ -146,6 +157,7 @@ async function copy(text: string, done: string) {
 
 function ComponentPanel({
   entry,
+  onPreset,
   tagSuggestions,
   onTagsChange,
   values,
@@ -215,7 +227,14 @@ function ComponentPanel({
               </button>
             }
           >
-            <div className="pt-1">
+            <div className="flex flex-col gap-5 pt-1">
+              {meta.presets && meta.presets.length > 1 && (
+                <PresetPicker
+                  presets={meta.presets}
+                  values={values}
+                  onPick={onPreset}
+                />
+              )}
               <ComponentControls
                 controls={meta.controls}
                 values={values}
@@ -258,5 +277,53 @@ function ComponentPanel({
         </Button>
       </div>
     </>
+  )
+}
+
+const CUSTOM = "__custom__"
+
+// Ready-made looks; shows "Custom" once you've changed something.
+function PresetPicker({
+  presets,
+  values,
+  onPick,
+}: {
+  presets: { name: string; values: Values }[]
+  values: Values
+  onPick: (values: Values) => void
+}) {
+  const labelId = React.useId()
+  const current = presets.find((preset) =>
+    Object.entries(preset.values).every(([key, value]) => values[key] === value)
+  )
+  const items = [
+    ...(current ? [] : [{ value: CUSTOM, label: "Custom" }]),
+    ...presets.map((preset) => ({ value: preset.name, label: preset.name })),
+  ]
+  return (
+    <div className="flex flex-col gap-2">
+      <span id={labelId} className="text-sm">
+        Preset
+      </span>
+      <Select
+        items={items}
+        value={current?.name ?? CUSTOM}
+        onValueChange={(name) => {
+          const preset = presets.find((p) => p.name === name)
+          if (preset) onPick(preset.values)
+        }}
+      >
+        <SelectTrigger aria-labelledby={labelId} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }

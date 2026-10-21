@@ -13,7 +13,24 @@ export type Control =
       default: number
       unit?: string
     }
+  // "#rrggbb", or "#rrggbbaa" when the colour is partly see-through.
   | { key: string; label: string; type: "color"; default: string }
+  // A list of colours, stored as "#aaaaaa,#bbbbbb".
+  | {
+      key: string
+      label: string
+      type: "colors"
+      max: number
+      default: string
+    }
+  // An image the component reads (not a CSS background): a built-in sample, or your own file.
+  | {
+      key: string
+      label: string
+      type: "picture"
+      samples: { label: string; value: string }[]
+      default: string
+    }
   | {
       key: string
       label: string
@@ -42,6 +59,8 @@ export type ComponentMeta = {
   createdAt: string // ISO date
   controls: Control[]
   prompt: (values: Values) => string
+  /** Ready-made combinations of control values, picked from a menu. */
+  presets?: { name: string; values: Values }[]
   demo?: ReactNode // shown on top of the component in previews (e.g. a sample headline)
 }
 
