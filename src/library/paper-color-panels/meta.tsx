@@ -78,7 +78,7 @@ export default defineComponent({
   slug: "paper-color-panels",
   title: "Panels colour",
   description:
-    "Pseudo-3D semi-transparent panels rotating around a central axis By Paper Shaders.",
+    "Pseudo-3D semi-transparent panels rotating around a central axis. By Paper Shaders.",
   tags: ["paper", "shader", "effect"],
   createdAt: "2026-10-21",
   controls: [

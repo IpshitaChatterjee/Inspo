@@ -121,7 +121,7 @@ export default defineComponent({
   slug: "paper-fluted-glass",
   title: "Fluted glass",
   description:
-    "Fluted glass image filter that transforms an image into streaked, ribbed distortions, By Paper Shaders.",
+    "Fluted glass image filter that transforms an image into streaked, ribbed distortions,. By Paper Shaders.",
   tags: ["paper", "shader", "image filter"],
   createdAt: "2026-10-21",
   controls: [

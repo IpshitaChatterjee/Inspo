@@ -392,7 +392,7 @@ const settings = ${JSON.stringify(settings, null, 2)}
 export default defineComponent({
   slug: "paper-${name}",
   title: ${JSON.stringify(title)},
-  description: ${JSON.stringify(`${summary} By Paper Shaders.`)},
+  description: ${JSON.stringify(`${summary.replace(/\.?\s*$/, ".")} By Paper Shaders.`)},
   tags: ${JSON.stringify(tags)},
   createdAt: "${CREATED}",
   controls: ${literal(controls)},

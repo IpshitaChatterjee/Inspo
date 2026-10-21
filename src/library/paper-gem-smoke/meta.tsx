@@ -83,7 +83,7 @@ export default defineComponent({
   slug: "paper-gem-smoke",
   title: "Gem smoke",
   description:
-    "Animated color fields placed over uploaded logo shape; gives the illusion of smoky noise By Paper Shaders.",
+    "Animated color fields placed over uploaded logo shape; gives the illusion of smoky noise. By Paper Shaders.",
   tags: ["paper", "shader", "logo animation"],
   createdAt: "2026-10-21",
   controls: [

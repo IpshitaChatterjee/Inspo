@@ -66,7 +66,7 @@ export default defineComponent({
   slug: "paper-static-mesh-gradient",
   title: "Static mesh gradient",
   description:
-    "Multi-point mesh gradient with up to 10 color spots, enhanced by two-direction warping, By Paper Shaders.",
+    "Multi-point mesh gradient with up to 10 color spots, enhanced by two-direction warping,. By Paper Shaders.",
   tags: ["paper", "shader", "effect"],
   createdAt: "2026-10-21",
   controls: [

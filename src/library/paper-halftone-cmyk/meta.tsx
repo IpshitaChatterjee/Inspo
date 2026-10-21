@@ -127,7 +127,7 @@ export default defineComponent({
   slug: "paper-halftone-cmyk",
   title: "Halftone CMYK",
   description:
-    "CMYK halftone printing effect applied to images with customizable dot patterns By Paper Shaders.",
+    "CMYK halftone printing effect applied to images with customizable dot patterns. By Paper Shaders.",
   tags: ["paper", "shader", "image filter"],
   createdAt: "2026-10-21",
   controls: [

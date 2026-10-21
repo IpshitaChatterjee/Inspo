@@ -77,7 +77,7 @@ export default defineComponent({
   slug: "paper-static-radial-gradient",
   title: "Static radial gradient",
   description:
-    "Radial gradient with up to 10 blended colors, featuring advanced mixing modes, focal point controls, By Paper Shaders.",
+    "Radial gradient with up to 10 blended colors, featuring advanced mixing modes, focal point controls,. By Paper Shaders.",
   tags: ["paper", "shader", "effect"],
   createdAt: "2026-10-21",
   controls: [

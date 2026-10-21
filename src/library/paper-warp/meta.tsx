@@ -65,7 +65,7 @@ export default defineComponent({
   slug: "paper-warp",
   title: "Warp",
   description:
-    "Animated color fields warped by noise and swirls, applied over base patterns By Paper Shaders.",
+    "Animated color fields warped by noise and swirls, applied over base patterns. By Paper Shaders.",
   tags: ["paper", "shader", "effect"],
   createdAt: "2026-10-21",
   controls: [

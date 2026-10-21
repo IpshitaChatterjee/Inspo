@@ -66,7 +66,7 @@ export default defineComponent({
   slug: "paper-image-dithering",
   title: "Image dithering",
   description:
-    "A dithering image filter with support for 4 dithering modes and multiple color palettes By Paper Shaders.",
+    "A dithering image filter with support for 4 dithering modes and multiple color palettes. By Paper Shaders.",
   tags: ["paper", "shader", "image filter"],
   createdAt: "2026-10-21",
   controls: [

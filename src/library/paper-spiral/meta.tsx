@@ -73,7 +73,7 @@ export default defineComponent({
   slug: "paper-spiral",
   title: "Spiral",
   description:
-    "A single-colored animated spiral that morphs across a wide range of shapes - By Paper Shaders.",
+    "A single-colored animated spiral that morphs across a wide range of shapes -. By Paper Shaders.",
   tags: ["paper", "shader", "effect"],
   createdAt: "2026-10-21",
   controls: [

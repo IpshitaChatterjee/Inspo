@@ -53,7 +53,7 @@ export default defineComponent({
   slug: "paper-mesh-gradient",
   title: "Mesh gradient",
   description:
-    "A flowing composition of color spots, moving along distinct trajectories By Paper Shaders.",
+    "A flowing composition of color spots, moving along distinct trajectories. By Paper Shaders.",
   tags: ["paper", "shader", "effect"],
   createdAt: "2026-10-21",
   controls: [

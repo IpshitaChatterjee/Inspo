@@ -129,7 +129,7 @@ const settings = [
 export default defineComponent({
   slug: "paper-lens-distortion",
   title: "Lens distortion",
-  description: " By Paper Shaders.",
+  description: ". By Paper Shaders.",
   tags: ["paper", "shader", "image filter"],
   createdAt: "2026-10-21",
   controls: [
