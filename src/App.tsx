@@ -25,6 +25,7 @@ import type { Selection } from "@/components/inspo-card"
 import { MasonryGrid } from "@/components/masonry-grid"
 import { MobileTags } from "@/components/mobile-tags"
 import { ProjectMoodboard } from "@/components/project-moodboard"
+import { AddToProjectDialog } from "@/components/add-to-project-dialog"
 import { ProjectHeader, type ProjectTab } from "@/components/project-header"
 import { SelectionBar } from "@/components/selection-bar"
 import { SidebarProjects } from "@/components/sidebar-projects"
@@ -48,9 +49,10 @@ import { Kbd } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { useCurrentApp, type AppName } from "@/hooks/use-current-app"
 import { useLibrary } from "@/hooks/use-library"
+import { matches } from "@/lib/inspo-search"
 import type { Project } from "@/lib/projects"
-import { looksLikeUrl, useSaver } from "@/hooks/use-saver"
-import { allTagsOf, GALLERY, hostOf, type Item, type Kind } from "@/lib/api"
+import { looksLikeUrl, useSaver, whereOf } from "@/hooks/use-saver"
+import { allTagsOf, GALLERY, type Kind } from "@/lib/api"
 import { library as componentLibrary, type LibraryEntry } from "@/library"
 import { componentTagCounts, filterComponents } from "@/library/search"
 
@@ -67,57 +69,6 @@ function isTyping(target: EventTarget | null) {
     target instanceof HTMLElement &&
     !!target.closest("input, textarea, [contenteditable='true']")
   )
-}
-
-// Colour words people use, mapped to the names the Mac gives colours.
-// Teal reads as green to some eyes and blue to others, so it counts for both.
-const COLOR_WORDS: Record<string, string[]> = {
-  red: ["red"],
-  orange: ["orange"],
-  yellow: ["yellow"],
-  green: ["green", "teal"],
-  teal: ["teal"],
-  cyan: ["teal"],
-  turquoise: ["teal"],
-  blue: ["blue", "teal"],
-  purple: ["purple"],
-  violet: ["purple"],
-  pink: ["pink"],
-  brown: ["brown"],
-  beige: ["beige"],
-  cream: ["beige"],
-  black: ["black"],
-  dark: ["black"],
-  white: ["white"],
-  light: ["white"],
-  gray: ["gray"],
-  grey: ["gray"],
-}
-
-function matches(item: Item, query: string) {
-  if (!query) return true
-  const haystack = [
-    item.title,
-    item.description,
-    item.note,
-    item.name,
-    item.text,
-    hostOf(item.source),
-    ...item.fonts.map((font) => font.family),
-    ...allTagsOf(item),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .every((raw) => {
-      const word = raw.replace(/^#/, "")
-      const colors = COLOR_WORDS[word]
-      if (colors) return colors.some((color) => item.colors.includes(color))
-      return haystack.includes(word)
-    })
 }
 
 export function App() {
@@ -161,6 +112,7 @@ export function App() {
   )
   const [adding, setAdding] = React.useState(false)
   const [help, setHelp] = React.useState(false)
+  const [picking, setPicking] = React.useState(false)
   const [projectTab, setProjectTab] = React.useState<ProjectTab>("collected")
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const clearSelection = React.useCallback(() => {
@@ -169,8 +121,6 @@ export function App() {
   const searchRef = React.useRef<HTMLInputElement>(null)
 
   // New saves pick up the tag you're looking at.
-  const tag = view.kind === "tag" ? view.name : null
-  const { saveFiles, saveLink } = useSaver(tag)
 
   const items = React.useMemo(() => library?.items ?? [], [library])
   const projects = React.useMemo(() => library?.projects ?? [], [library])
@@ -242,6 +192,24 @@ export function App() {
   )
   const selectedIds = [...selected]
   const named = (n: number) => `${n} ${n === 1 ? "inspo" : "inspos"}`
+
+  // New saves pick up the tag or project you're looking at.
+  const tag = view.kind === "tag" ? view.name : null
+  const saveTarget = React.useMemo(
+    () => ({
+      tag,
+      project: project && { id: project.id, name: project.name },
+    }),
+    [tag, project]
+  )
+  const addSaved = React.useCallback(
+    (ids: string[]) => {
+      if (project && ids.length) changeProjectItems(project.id, ids)
+    },
+    [project, changeProjectItems]
+  )
+  const { saveFiles, saveLink } = useSaver(saveTarget, addSaved)
+  const where = whereOf(saveTarget)
 
   const showView = React.useCallback((next: View) => {
     setView(next)
@@ -490,6 +458,7 @@ export function App() {
                   tab={projectTab}
                   readOnly={GALLERY}
                   onTab={setProjectTab}
+                  onAddInspos={() => setPicking(true)}
                   onRename={(name) => updateProject(project.id, { name })}
                   onArchive={(archived) => {
                     updateProject(project.id, { archived })
@@ -571,7 +540,7 @@ export function App() {
                     <EmptyDescription>
                       {GALLERY
                         ? "Inspos added to this project will show up here."
-                        : "Go to Everything, select some inspos, and choose Add to project."}
+                        : "Use Add inspos to pick from your library, or drop or paste something new here."}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -632,7 +601,7 @@ export function App() {
           <>
             <AddDialog
               open={adding}
-              tag={tag}
+              where={where}
               onOpenChange={setAdding}
               onLink={saveLink}
               onFiles={saveFiles}
@@ -642,7 +611,19 @@ export function App() {
               folder={library?.folder ?? ""}
               onOpenChange={setHelp}
             />
-            <DropOverlay tag={tag} onFiles={saveFiles} onLink={saveLink} />
+            <DropOverlay where={where} onFiles={saveFiles} onLink={saveLink} />
+            {project && (
+              <AddToProjectDialog
+                open={picking}
+                project={project}
+                items={items}
+                onOpenChange={setPicking}
+                onAdd={(ids) => {
+                  changeProjectItems(project.id, ids)
+                  toast(`Added ${named(ids.length)} to “${project.name}”`)
+                }}
+              />
+            )}
             <SelectionBar
               count={selected.size}
               projects={projects.filter((p) => !p.archived)}

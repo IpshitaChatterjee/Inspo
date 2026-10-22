@@ -25,6 +25,8 @@ and run `npx vite build` first so the page is up to date).
 
 - Tap the round tick on a card (it shows on hover; always on phones) to pick inspos, then **Add to project** → an existing
   project or **New project…**. An opened inspo also lists its projects, and can be added or taken out.
+- Inside a project, **Add inspos** picks more from the library (with search), and anything you save
+  there (drop, ⌘V paste, or Save) goes into the library and the project at once.
 - A project has two views: **Collected** (its inspos) and **Moodboard**, a ready-made bento of its
   pictures plus colour and type tiles taken from the pictures on the board. With fewer pictures than
   spots, pictures grow to fill the gaps. The panel beside it picks the layout, reorders pictures (drag)

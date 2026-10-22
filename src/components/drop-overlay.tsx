@@ -5,16 +5,18 @@ import { DownloadIcon } from "lucide-react"
 import { looksLikeUrl } from "@/hooks/use-saver"
 
 type DropOverlayProps = {
-  tag: string | null
+  /** Where saves go besides the library, e.g. "with #type". */
+  where: string
   onFiles: (files: File[]) => void
   onLink: (url: string) => void
 }
 
 const carriesSomething = (e: DragEvent) =>
-  !!e.dataTransfer && [...e.dataTransfer.types].some((t) => t === "Files" || t === "text/uri-list")
+  !!e.dataTransfer &&
+  [...e.dataTransfer.types].some((t) => t === "Files" || t === "text/uri-list")
 
 /** Drag files or links from anywhere (Finder, a browser tab) onto the window. */
-export function DropOverlay({ tag, onFiles, onLink }: DropOverlayProps) {
+export function DropOverlay({ where, onFiles, onLink }: DropOverlayProps) {
   const [active, setActive] = React.useState(false)
   const depth = React.useRef(0)
 
@@ -39,7 +41,10 @@ export function DropOverlay({ tag, onFiles, onLink }: DropOverlayProps) {
       setActive(false)
       const files = [...(e.dataTransfer?.files ?? [])]
       if (files.length) return onFiles(files)
-      const text = e.dataTransfer?.getData("text/uri-list") || e.dataTransfer?.getData("text/plain") || ""
+      const text =
+        e.dataTransfer?.getData("text/uri-list") ||
+        e.dataTransfer?.getData("text/plain") ||
+        ""
       const url = text.split("\n").find((line) => looksLikeUrl(line))
       if (url) onLink(url.trim())
     }
@@ -74,14 +79,20 @@ export function DropOverlay({ tag, onFiles, onLink }: DropOverlayProps) {
           >
             <motion.span
               animate={{ y: [0, -8, 0] }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+              transition={{
+                duration: 1.6,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
               className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"
             >
               <DownloadIcon className="size-6" />
             </motion.span>
-            <span className="font-heading text-2xl font-medium">Drop to save</span>
+            <span className="font-heading text-2xl font-medium">
+              Drop to save
+            </span>
             <span className="text-sm text-muted-foreground">
-              {tag ? `Saved with #${tag}` : "Goes into your iCloud Inspo folder"}
+              {where ? `Saved ${where}` : "Goes into your iCloud Inspo folder"}
             </span>
           </motion.div>
         </motion.div>

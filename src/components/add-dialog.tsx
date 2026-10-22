@@ -9,21 +9,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { looksLikeUrl } from "@/hooks/use-saver"
 
 type AddDialogProps = {
   open: boolean
-  tag: string | null
+  /** Where saves go besides the library, e.g. "with #type". */
+  where: string
   onOpenChange: (open: boolean) => void
   onLink: (url: string) => void
   onFiles: (files: File[]) => void
 }
 
-export function AddDialog({ open, tag, onOpenChange, onLink, onFiles }: AddDialogProps) {
+export function AddDialog({
+  open,
+  where,
+  onOpenChange,
+  onLink,
+  onFiles,
+}: AddDialogProps) {
   const [url, setUrl] = React.useState("")
   const fileInput = React.useRef<HTMLInputElement>(null)
-  const valid = looksLikeUrl(url) || /^[\w-]+(\.[\w-]+)+\/?\S*$/.test(url.trim())
+  const valid =
+    looksLikeUrl(url) || /^[\w-]+(\.[\w-]+)+\/?\S*$/.test(url.trim())
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,8 +51,9 @@ export function AddDialog({ open, tag, onOpenChange, onLink, onFiles }: AddDialo
         <DialogHeader>
           <DialogTitle className="font-heading">Save inspiration</DialogTitle>
           <DialogDescription>
-            Paste a link and the images or video behind it get saved to your iCloud folder
-            {tag ? `, tagged #${tag}` : ""}.
+            Paste a link and the images or video behind it get saved to your
+            iCloud folder
+            {where && ` ${where}`}.
           </DialogDescription>
         </DialogHeader>
 
@@ -56,7 +69,12 @@ export function AddDialog({ open, tag, onOpenChange, onLink, onFiles }: AddDialo
               placeholder="https://x.com/…"
             />
           </InputGroup>
-          <Button type="submit" size="lg" className="h-10 px-4" disabled={!valid}>
+          <Button
+            type="submit"
+            size="lg"
+            className="h-10 px-4"
+            disabled={!valid}
+          >
             Save
           </Button>
         </form>
@@ -74,7 +92,9 @@ export function AddDialog({ open, tag, onOpenChange, onLink, onFiles }: AddDialo
         >
           <ImagePlusIcon className="size-6 text-muted-foreground" />
           <span className="text-sm font-medium">Choose images or videos</span>
-          <span className="text-xs text-muted-foreground">You can also drop files anywhere on the page, or paste with ⌘V</span>
+          <span className="text-xs text-muted-foreground">
+            You can also drop files anywhere on the page, or paste with ⌘V
+          </span>
         </button>
         <input
           ref={fileInput}

@@ -5,6 +5,7 @@ import {
   ArchiveRestoreIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  PlusIcon,
   Trash2Icon,
 } from "lucide-react"
 import { cn } from "cn"
@@ -33,6 +34,8 @@ type ProjectHeaderProps = {
   tab: ProjectTab
   readOnly: boolean
   onTab: (tab: ProjectTab) => void
+  /** Opens the picker for adding inspos from the library. */
+  onAddInspos: () => void
   onRename: (name: string) => void
   onArchive: (archived: boolean) => void
   onDelete: () => void
@@ -45,6 +48,7 @@ export function ProjectHeader({
   tab,
   readOnly,
   onTab,
+  onAddInspos,
   onRename,
   onArchive,
   onDelete,
@@ -115,6 +119,17 @@ export function ProjectHeader({
           </button>
         ))}
       </div>
+
+      {!readOnly && (
+        <Button
+          variant="outline"
+          className="rounded-full"
+          onClick={onAddInspos}
+        >
+          <PlusIcon />
+          Add inspos
+        </Button>
+      )}
 
       {!readOnly && (
         <DropdownMenu>
