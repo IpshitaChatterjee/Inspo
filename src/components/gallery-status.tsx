@@ -65,9 +65,22 @@ export function GalleryStatus({
   if (publishing) detail = "Publishing…"
   else if (state?.status === "error")
     detail = (
-      <span className="flex items-center gap-1 text-destructive">
-        <TriangleAlertIcon className="size-3" />
-        {state.error ?? "Couldn't publish"}
+      <span className="flex flex-col gap-0.5 leading-snug">
+        <span className="flex items-start gap-1 text-destructive">
+          <TriangleAlertIcon className="mt-px size-3 shrink-0" />
+          <span className="min-w-0 break-words">
+            {state.error ?? "Couldn't publish."}
+          </span>
+        </span>
+        {state.error === "Signed out of Cloudflare." && (
+          <span>
+            Run <code className="font-mono">npx wrangler login</code> in the
+            Inspo folder, then press refresh.
+          </span>
+        )}
+        {state.publishedAt && (
+          <span>Gallery last updated {timeAgo(state.publishedAt)}.</span>
+        )}
       </span>
     )
   else if (state?.publishedAt)

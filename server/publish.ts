@@ -32,11 +32,22 @@ const STATE_FILE = path.join(CACHE_DIR, "publish.json")
 const WORKER_CONFIG = path.join(CACHE_DIR, "wrangler.json")
 // Handles editor mode in the gallery; everything else is static files.
 const WORKER_SCRIPT = path.join(ROOT, "gallery-worker/index.js")
+// Copied next to the site, so the GitHub copy holds everything Cloudflare needs.
+const WORKER_COPY = path.join(CACHE_DIR, "worker.js")
+const GALLERY_GIT_DIR = path.join(CACHE_DIR, "gallery.git")
+// The page and the data change with every publish, so they show when it's live.
+const LIVE_FILES = ["index.html", "data.json"]
+const LIVE_WAIT_MS = 20 * 60_000
+const LIVE_CHECK_MS = 20_000
 const KEYCHAIN_SERVICE = "inspo-gallery"
 // How often the Mac collects edits made in the gallery.
 const PULL_EVERY_MS = 3 * 60_000
 
 const PROJECT = process.env.INSPO_SITE_NAME ?? "inspo"
+// Private GitHub copy ("owner/name") that Cloudflare publishes from. When set,
+// publishing needs only the Mac's GitHub sign-in, not its Cloudflare one, which
+// keeps running out (a renewal that fails while the Mac sleeps breaks it).
+const GALLERY_REPO = process.env.INSPO_GALLERY_REPO
 // Cloudflare's free plan: 25 MiB per file, 20,000 files per site.
 const MAX_FILE_BYTES = 25 * 1024 * 1024
 export const FILE_LIMIT = 20_000
@@ -136,7 +147,9 @@ export async function publishNow() {
       })
       await clearAppliedEdits()
     } else {
-      const url = await deploy()
+      const url = GALLERY_REPO
+        ? await publishViaGitHub(GALLERY_REPO)
+        : await deploy()
       await setState({
         status: "idle",
         pending: false,
@@ -158,13 +171,27 @@ export async function publishNow() {
   return publishState()
 }
 
-function friendlyError(error: unknown) {
-  const text = `${errorMessage(error)} ${(error as { output?: string }).output ?? ""}`
-  if (/not logged in|authenticat|login/i.test(text))
-    return "Not signed in to Cloudflare."
+// Shown in the sidebar, so it must stay short and human. The full output is in the log.
+export function friendlyError(error: unknown) {
+  const message = errorMessage(error)
+  const text = `${message} ${(error as { output?: string }).output ?? ""}`
+  // Checked before Cloudflare, whose sign-in words ("login", "authentication") git also uses.
+  if (
+    /could not read Username|gh auth login|Authentication failed for 'https:\/\/github/i.test(
+      text
+    )
+  )
+    return "Signed out of GitHub."
+  if (/Could not resolve host|unable to access 'https:\/\/github/i.test(text))
+    return "Offline. Will try again with the next change."
+  // When wrangler's saved sign-in has run out, it asks for CLOUDFLARE_API_TOKEN instead of saying so.
+  if (/not logged in|authenticat|login|CLOUDFLARE_API_TOKEN/i.test(text))
+    return "Signed out of Cloudflare."
   if (/too many files|file count/i.test(text))
     return "The gallery has more files than Cloudflare's free plan allows."
-  return errorMessage(error).split("\n")[0].slice(0, 200)
+  if (message.startsWith("Command failed"))
+    return "Couldn't publish. Try again in a bit."
+  return message.split("\n")[0].slice(0, 200)
 }
 
 // ---------- Building the site ----------
@@ -371,16 +398,30 @@ async function exportVideo(file: Source, key: string) {
 // request is a plain file. Run from the cache folder so the tool doesn't try
 // to configure this project.
 async function deploy() {
+  await writeWorkerConfig()
+  const output = await wrangler(
+    ["deploy", "--config", WORKER_CONFIG],
+    60 * 60_000
+  )
+  const url = output.match(/https:\/\/[a-z0-9.-]+\.workers\.dev/)?.[0]
+  if (!url) throw new Error("Published, but Cloudflare didn't say where.")
+  return url
+}
+
+// Paths are relative to the cache folder, so the same files work from the
+// GitHub copy that Cloudflare builds from.
+async function writeWorkerConfig() {
   const kvId = state.kvId ?? (await createEditStore())
+  await fsp.copyFile(WORKER_SCRIPT, WORKER_COPY)
   await fsp.writeFile(
     WORKER_CONFIG,
     JSON.stringify(
       {
         name: PROJECT,
-        main: WORKER_SCRIPT,
+        main: path.basename(WORKER_COPY),
         compatibility_date: "2026-10-01",
         assets: {
-          directory: SITE_DIR,
+          directory: path.basename(SITE_DIR),
           binding: "ASSETS",
           run_worker_first: ["/api/*"],
         },
@@ -390,13 +431,113 @@ async function deploy() {
       2
     )
   )
-  const output = await wrangler(
-    ["deploy", "--config", WORKER_CONFIG],
+}
+
+// ---------- Publishing through GitHub ----------
+
+async function publishViaGitHub(repo: string) {
+  const url = state.url
+  if (!url)
+    throw new Error("Publish once with Cloudflare before switching to GitHub.")
+  await writeWorkerConfig()
+  await pushGallery(CACHE_DIR, GALLERY_GIT_DIR, galleryRemote(repo))
+  if (!(await waitUntilLive(url)))
+    throw new Error("Sent to GitHub, but Cloudflare hasn't put it live yet.")
+  return url
+}
+
+export function galleryRemote(repo: string) {
+  return /^[\w.-]+\/[\w.-]+$/.test(repo)
+    ? `https://github.com/${repo}.git`
+    : repo
+}
+
+/**
+ * Uploads the gallery (site/, the worker and its config) as one fresh version
+ * that replaces the last, so the GitHub copy never grows with history. Only
+ * changed files are sent, because GitHub already has the rest.
+ */
+export async function pushGallery(
+  workTree: string,
+  gitDir: string,
+  remote: string
+) {
+  const signIn = await githubSignIn(remote)
+  const git = (args: string[], timeoutMs = 5 * 60_000) =>
+    run(
+      "/usr/bin/git",
+      [
+        "--git-dir",
+        gitDir,
+        "--work-tree",
+        workTree,
+        "-c",
+        "user.name=Inspo",
+        "-c",
+        "user.email=inspo@localhost",
+        ...signIn,
+        ...args,
+      ],
+      timeoutMs,
+      workTree
+    )
+  if (!(await exists(gitDir))) await git(["init", "--quiet"])
+  await git(["add", "--all", "--", "site", "worker.js", "wrangler.json"])
+  const tree = (await git(["write-tree"])).trim()
+  const commit = (
+    await git(["commit-tree", tree, "-m", "Gallery update"])
+  ).trim()
+  await git(
+    ["push", "--force", "--quiet", remote, `${commit}:refs/heads/main`],
     60 * 60_000
   )
-  const url = output.match(/https:\/\/[a-z0-9.-]+\.workers\.dev/)?.[0]
-  if (!url) throw new Error("Published, but Cloudflare didn't say where.")
-  return url
+  // Remembered here, so the next upload knows what GitHub already has.
+  await git(["update-ref", "refs/heads/main", commit])
+}
+
+// The app runs without Homebrew on its PATH, so point git at GitHub's own
+// sign-in tool directly; it uses the Mac's lasting GitHub login.
+async function githubSignIn(remote: string) {
+  if (!remote.startsWith("https://github.com/")) return []
+  for (const gh of ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]) {
+    if (await exists(gh))
+      return [
+        "-c",
+        "credential.helper=",
+        "-c",
+        `credential.helper=!${gh} auth git-credential`,
+      ]
+  }
+  return []
+}
+
+// Cloudflare builds from GitHub on its own, so watch the live gallery until it
+// serves the same files as here.
+async function waitUntilLive(url: string) {
+  const deadline = Date.now() + LIVE_WAIT_MS
+  const wanted = await Promise.all(
+    LIVE_FILES.map((name) => fsp.readFile(path.join(SITE_DIR, name), "utf8"))
+  )
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, LIVE_CHECK_MS))
+    try {
+      const live = await Promise.all(
+        LIVE_FILES.map(async (name) => {
+          const res = await fetch(`${url}/${name}`, {
+            cache: "no-store",
+            signal: AbortSignal.timeout(20_000),
+          })
+          return res.ok ? res.text() : null
+        })
+      )
+      if (live.every((text, i) => text === wanted[i])) return true
+    } catch (error) {
+      console.warn(
+        `[publish] checking the live gallery: ${errorMessage(error)}`
+      )
+    }
+  }
+  return false
 }
 
 function wrangler(args: string[], timeoutMs = 120_000) {

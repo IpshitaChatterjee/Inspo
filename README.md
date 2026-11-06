@@ -33,6 +33,18 @@ notes) to Cloudflare's free static hosting, so it can be browsed on any phone an
   images as high-quality JPEG, videos at 1080p or 720p; videos that still don't fit show as a still.
 - The free plan allows 20,000 files, roughly 9,000 items. `INSPO_SITE_NAME` changes the site name.
 
+### Publishing through GitHub
+
+Cloudflare's sign-in renews itself with a one-time pass, and a renewal that fails while the Mac is asleep
+or offline breaks it until you sign in again. To avoid that, the gallery can go through a private GitHub
+repository instead: set `INSPO_GALLERY_REPO` (e.g. `you/inspo-gallery`) for the app, and in Cloudflare
+connect the `inspo` Worker to that repository (Workers & Pages → inspo → Settings → Builds → Connect).
+
+- Each publish uploads the finished gallery as one fresh version that replaces the last (only changed
+  files are sent), using the Mac's GitHub sign-in. Cloudflare then builds it on its own, and the
+  sidebar says it's updated once the live gallery shows the change.
+- Setting or changing the gallery password still uses `npx wrangler login`.
+
 ## Components
 
 Next to Inspo there is a second app, **Components**: a grid of live, tweakable pieces of interface that
