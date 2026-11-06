@@ -185,3 +185,34 @@
     animation: none;
   }
 }
+
+/*
+ * The raised look for filled buttons: a soft shadow below, a white glow
+ * inside, a 1px rim in the button's own colour, and a white edge that fades
+ * from the top. Uses the button's fill (--raised-fill) so any colour works.
+ */
+@utility btn-raised {
+  position: relative;
+  /* Through --tw-shadow, so the keyboard focus ring adds to these instead of replacing them. */
+  --tw-shadow:
+    0 3px 6px rgb(0 0 0 / 0.2),
+    inset 0 0 6px 2px rgb(255 255 255 / 0.24),
+    0 0 0 1px var(--raised-fill, var(--primary));
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(to bottom, rgb(255 255 255 / 0.4), rgb(255 255 255 / 0));
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
