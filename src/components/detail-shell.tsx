@@ -3,7 +3,6 @@ import { motion } from "motion/react"
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Kbd } from "@/components/ui/kbd"
 
 const spring = { type: "spring", stiffness: 260, damping: 30 } as const
 
@@ -143,10 +142,6 @@ export function DetailNav({
         >
           <ChevronRightIcon />
         </Button>
-        <span className="ml-1 hidden items-center gap-1 text-xs text-muted-foreground lg:flex">
-          <Kbd>←</Kbd>
-          <Kbd>→</Kbd>
-        </span>
       </div>
       {/* Phones have a floating close button instead. */}
       <Button
