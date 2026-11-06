@@ -31,17 +31,7 @@ import {
 import type { TagCount } from "@/lib/tags"
 
 export type View =
-  | { kind: "all" }
-  | { kind: "untagged" }
-  | { kind: "tag"; name: string }
-  | { kind: "project"; id: string }
-
-export function sameView(a: View, b: View) {
-  if (a.kind !== b.kind) return false
-  if (a.kind === "tag") return b.kind === "tag" && a.name === b.name
-  if (a.kind === "project") return b.kind === "project" && a.id === b.id
-  return true
-}
+  { kind: "all" } | { kind: "untagged" } | { kind: "tag"; name: string }
 
 /** Items with no tags at all: none of yours and none added automatically. */
 export const isUntagged = (item: Item) => allTagsOf(item).length === 0
@@ -58,8 +48,6 @@ type AppSidebarProps = {
   onView: (view: View) => void
   onPublish: () => void
   onSetPassword: (password: string | null) => Promise<void>
-  /** Inspo only: the projects list sits between Everything and Tags. */
-  projects?: React.ReactNode
 }
 
 const TAG_PREVIEW = 30
@@ -76,12 +64,14 @@ export function AppSidebar({
   onView,
   onPublish,
   onSetPassword,
-  projects,
 }: AppSidebarProps) {
   const [renaming, setRenaming] = React.useState<string | null>(null)
   const [showAll, setShowAll] = React.useState(false)
 
-  const isActive = (candidate: View) => sameView(candidate, view)
+  const isActive = (candidate: View) =>
+    candidate.kind === view.kind &&
+    (candidate.kind !== "tag" ||
+      (view.kind === "tag" && view.name === candidate.name))
 
   const visibleTags = showAll ? tags : tags.slice(0, TAG_PREVIEW)
   // Keep the selected tag visible even when it's past the preview cut-off.
@@ -120,8 +110,6 @@ export function AppSidebar({
             />
           )}
         </div>
-
-        {projects}
 
         <section className="flex flex-col gap-0.5">
           <span className="px-2 pb-1 text-xs font-medium text-muted-foreground">
@@ -217,7 +205,7 @@ export function AppSidebar({
   )
 }
 
-export type NavRowProps = {
+type NavRowProps = {
   icon: React.ReactNode
   label: string
   count: number
@@ -227,7 +215,7 @@ export type NavRowProps = {
   menu?: React.ReactNode
 }
 
-export function NavRow({
+function NavRow({
   icon,
   label,
   count,
@@ -273,14 +261,12 @@ export function NavRow({
   )
 }
 
-export function InlineName({
+function InlineName({
   initial,
   onDone,
-  placeholder = "Tag name",
 }: {
   initial: string
   onDone: (name: string | null) => void
-  placeholder?: string
 }) {
   const [value, setValue] = React.useState(initial)
   const done = React.useRef(false)
@@ -299,7 +285,7 @@ export function InlineName({
         if (e.key === "Enter") finish(value)
         if (e.key === "Escape") finish(null)
       }}
-      placeholder={placeholder}
+      placeholder="Tag name"
       className="h-8 rounded-md bg-background px-2 text-sm ring-1 ring-ring/60 outline-none"
     />
   )

@@ -8,7 +8,6 @@ import {
   SunIcon,
   TriangleAlertIcon,
 } from "lucide-react"
-import { toast } from "sonner"
 import { cn } from "cn"
 
 import { AppSwitcher } from "@/components/app-switcher"
@@ -21,14 +20,8 @@ import { ComponentGrid } from "@/components/component-grid"
 import { CanEditContext } from "@/lib/gallery-edits"
 import { HowToSave } from "@/components/how-to-save"
 import { InspoDetail } from "@/components/inspo-detail"
-import type { Selection } from "@/components/inspo-card"
 import { MasonryGrid } from "@/components/masonry-grid"
 import { MobileTags } from "@/components/mobile-tags"
-import { ProjectMoodboard } from "@/components/project-moodboard"
-import { AddToProjectDialog } from "@/components/add-to-project-dialog"
-import { ProjectHeader, type ProjectTab } from "@/components/project-header"
-import { SelectionBar } from "@/components/selection-bar"
-import { SidebarProjects } from "@/components/sidebar-projects"
 import { countTags, type TagCount } from "@/lib/tags"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
@@ -49,10 +42,8 @@ import { Kbd } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { useCurrentApp, type AppName } from "@/hooks/use-current-app"
 import { useLibrary } from "@/hooks/use-library"
-import { matches } from "@/lib/inspo-search"
-import type { Project } from "@/lib/projects"
-import { looksLikeUrl, useSaver, whereOf } from "@/hooks/use-saver"
-import { allTagsOf, GALLERY, type Kind } from "@/lib/api"
+import { looksLikeUrl, useSaver } from "@/hooks/use-saver"
+import { allTagsOf, GALLERY, hostOf, type Item, type Kind } from "@/lib/api"
 import { library as componentLibrary, type LibraryEntry } from "@/library"
 import { componentTagCounts, filterComponents } from "@/library/search"
 
@@ -71,6 +62,57 @@ function isTyping(target: EventTarget | null) {
   )
 }
 
+// Colour words people use, mapped to the names the Mac gives colours.
+// Teal reads as green to some eyes and blue to others, so it counts for both.
+const COLOR_WORDS: Record<string, string[]> = {
+  red: ["red"],
+  orange: ["orange"],
+  yellow: ["yellow"],
+  green: ["green", "teal"],
+  teal: ["teal"],
+  cyan: ["teal"],
+  turquoise: ["teal"],
+  blue: ["blue", "teal"],
+  purple: ["purple"],
+  violet: ["purple"],
+  pink: ["pink"],
+  brown: ["brown"],
+  beige: ["beige"],
+  cream: ["beige"],
+  black: ["black"],
+  dark: ["black"],
+  white: ["white"],
+  light: ["white"],
+  gray: ["gray"],
+  grey: ["gray"],
+}
+
+function matches(item: Item, query: string) {
+  if (!query) return true
+  const haystack = [
+    item.title,
+    item.description,
+    item.note,
+    item.name,
+    item.text,
+    hostOf(item.source),
+    ...item.fonts.map((font) => font.family),
+    ...allTagsOf(item),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .every((raw) => {
+      const word = raw.replace(/^#/, "")
+      const colors = COLOR_WORDS[word]
+      if (colors) return colors.some((color) => item.colors.includes(color))
+      return haystack.includes(word)
+    })
+}
+
 export function App() {
   const {
     library,
@@ -85,11 +127,6 @@ export function App() {
     lockEditing,
     setEditingPassword,
     updateComponentTags,
-    createProject,
-    updateProject,
-    changeProjectItems,
-    updateBoard,
-    deleteProject,
   } = useLibrary()
   // Components with your tag changes applied (saved in the iCloud library).
   const componentEntries = React.useMemo(
@@ -112,22 +149,13 @@ export function App() {
   )
   const [adding, setAdding] = React.useState(false)
   const [help, setHelp] = React.useState(false)
-  const [picking, setPicking] = React.useState(false)
-  const [projectTab, setProjectTab] = React.useState<ProjectTab>("collected")
-  const [selected, setSelected] = React.useState<Set<string>>(new Set())
-  const clearSelection = React.useCallback(() => {
-    setSelected(new Set())
-  }, [])
   const searchRef = React.useRef<HTMLInputElement>(null)
 
   // New saves pick up the tag you're looking at.
+  const tag = view.kind === "tag" ? view.name : null
+  const { saveFiles, saveLink } = useSaver(tag)
 
   const items = React.useMemo(() => library?.items ?? [], [library])
-  const projects = React.useMemo(() => library?.projects ?? [], [library])
-  const project =
-    view.kind === "project"
-      ? (projects.find((p) => p.id === view.id) ?? null)
-      : null
   const allTags = React.useMemo(
     () => [...new Set(items.flatMap(allTagsOf))].sort(),
     [items]
@@ -161,66 +189,14 @@ export function App() {
         : items.filter(
             (item) =>
               (view.kind === "all" ||
-                (view.kind === "untagged" && isUntagged(item)) ||
-                (view.kind === "tag" && allTagsOf(item).includes(view.name)) ||
-                (view.kind === "project" &&
-                  !!project?.items.includes(item.id))) &&
+                (view.kind === "untagged"
+                  ? isUntagged(item)
+                  : allTagsOf(item).includes(view.name))) &&
               (type === "all" || item.kind === type) &&
               matches(item, query.trim())
           ),
-    [inComponents, items, view, project, type, query]
+    [inComponents, items, view, type, query]
   )
-
-  // A deleted project can't be looked at any more.
-  if (library && view.kind === "project" && !project) setView({ kind: "all" })
-
-  const selection = React.useMemo<Selection | undefined>(
-    () =>
-      GALLERY || inComponents
-        ? undefined
-        : {
-            selected,
-            active: selected.size > 0,
-            toggle: (id) =>
-              setSelected((current) => {
-                const next = new Set(current)
-                if (!next.delete(id)) next.add(id)
-                return next
-              }),
-          },
-    [inComponents, selected]
-  )
-  const selectedIds = [...selected]
-  const named = (n: number) => `${n} ${n === 1 ? "inspo" : "inspos"}`
-
-  // New saves pick up the tag or project you're looking at.
-  const tag = view.kind === "tag" ? view.name : null
-  const saveTarget = React.useMemo(
-    () => ({
-      tag,
-      project: project && { id: project.id, name: project.name },
-    }),
-    [tag, project]
-  )
-  const addSaved = React.useCallback(
-    (ids: string[]) => {
-      if (project && ids.length) changeProjectItems(project.id, ids)
-    },
-    [project, changeProjectItems]
-  )
-  const { saveFiles, saveLink } = useSaver(saveTarget, addSaved)
-  const where = whereOf(saveTarget)
-
-  const showView = React.useCallback((next: View) => {
-    setView(next)
-    window.scrollTo({ top: 0 })
-  }, [])
-
-  const removeProject = (target: Project) => {
-    if (view.kind === "project" && view.id === target.id)
-      setView({ kind: "all" })
-    void deleteProject(target)
-  }
 
   const openItem = open ? (items.find((i) => i.id === open.id) ?? null) : null
 
@@ -277,14 +253,10 @@ export function App() {
     return () => window.removeEventListener("paste", onPaste)
   }, [saveFiles, saveLink, inComponents])
 
-  // "/" or ⌘K jumps to search; Esc lets go of a selection.
+  // "/" or ⌘K jumps to search.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (open || openComponent) return
-      if (e.key === "Escape" && !isTyping(e.target) && selection?.active) {
-        clearSelection()
-        return
-      }
       if (
         (e.key === "/" && !isTyping(e.target)) ||
         (e.key === "k" && (e.metaKey || e.ctrlKey))
@@ -295,7 +267,7 @@ export function App() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [open, openComponent, selection?.active, clearSelection])
+  }, [open, openComponent])
 
   // The browser bookmark button opens the app with ?add=<page>.
   const handledAdd = React.useRef(false)
@@ -317,15 +289,12 @@ export function App() {
         : "Everything"
       : view.kind === "untagged"
         ? "Untagged"
-        : view.kind === "project"
-          ? (project?.name ?? "")
-          : `#${view.name}`
+        : `#${view.name}`
   const switchApp = (next: AppName) => {
     if (next === app) return
     setApp(next)
     setView({ kind: "all" })
     setQuery("")
-    clearSelection()
     window.scrollTo({ top: 0 })
   }
   const resetKey = `${heading}|${type}|${query}`
@@ -350,24 +319,10 @@ export function App() {
             onApp={switchApp}
             onPublish={() => void publishNow()}
             onSetPassword={setEditingPassword}
-            onView={showView}
-            projects={
-              !inComponents && (
-                <SidebarProjects
-                  projects={projects}
-                  view={view}
-                  readOnly={GALLERY}
-                  onView={showView}
-                  onCreate={async (name) => {
-                    const created = await createProject(name)
-                    if (created) showView({ kind: "project", id: created.id })
-                  }}
-                  onRename={(id, name) => updateProject(id, { name })}
-                  onArchive={(id, archived) => updateProject(id, { archived })}
-                  onDelete={removeProject}
-                />
-              )
-            }
+            onView={(next) => {
+              setView(next)
+              window.scrollTo({ top: 0 })
+            }}
           />
 
           <main className="flex min-w-0 flex-1 flex-col">
@@ -440,54 +395,28 @@ export function App() {
               <MobileTags
                 tags={sidebarTags}
                 untagged={sidebarUntagged}
-                projects={
-                  inComponents
-                    ? []
-                    : projects.filter(
-                        (p) => !p.archived || p.id === project?.id
-                      )
-                }
                 view={view}
-                onView={showView}
+                onView={(next) => {
+                  setView(next)
+                  window.scrollTo({ top: 0 })
+                }}
               />
-              {project ? (
-                <ProjectHeader
-                  key={project.id}
-                  project={project}
-                  count={visible.length}
-                  tab={projectTab}
-                  readOnly={GALLERY}
-                  onTab={setProjectTab}
-                  onAddInspos={() => setPicking(true)}
-                  onRename={(name) => updateProject(project.id, { name })}
-                  onArchive={(archived) => {
-                    updateProject(project.id, { archived })
-                    toast(
-                      archived
-                        ? `Archived “${project.name}”`
-                        : `Restored “${project.name}”`
-                    )
-                  }}
-                  onDelete={() => removeProject(project)}
-                />
-              ) : (
-                <div className="flex items-baseline gap-3">
-                  <motion.h1
-                    key={heading}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="font-heading text-3xl font-semibold tracking-tight"
-                  >
-                    {heading}
-                  </motion.h1>
-                  <span className="text-sm text-muted-foreground tabular-nums">
-                    {inComponents ? visibleComponents.length : visible.length}
-                    {inComponents
-                      ? filteringComponents && ` of ${componentEntries.length}`
-                      : filtering && ` of ${items.length}`}
-                  </span>
-                </div>
-              )}
+              <div className="flex items-baseline gap-3">
+                <motion.h1
+                  key={heading}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="font-heading text-3xl font-semibold tracking-tight"
+                >
+                  {heading}
+                </motion.h1>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  {inComponents ? visibleComponents.length : visible.length}
+                  {inComponents
+                    ? filteringComponents && ` of ${componentEntries.length}`
+                    : filtering && ` of ${items.length}`}
+                </span>
+              </div>
 
               {inComponents ? (
                 visibleComponents.length ? (
@@ -511,13 +440,6 @@ export function App() {
                     </EmptyHeader>
                   </Empty>
                 )
-              ) : project && projectTab === "moodboard" ? (
-                <ProjectMoodboard
-                  project={project}
-                  items={items}
-                  readOnly={GALLERY}
-                  onBoard={(board) => updateBoard(project.id, board)}
-                />
               ) : !library && !error ? (
                 <div className="flex flex-1 items-center justify-center">
                   <Spinner className="size-6 text-muted-foreground" />
@@ -529,21 +451,7 @@ export function App() {
                   fresh={fresh}
                   openId={open?.morph ? open.id : null}
                   onOpen={(item) => setOpen({ id: item.id, morph: true })}
-                  selection={selection}
                 />
-              ) : project && !filtering ? (
-                <Empty className="flex-1">
-                  <EmptyHeader>
-                    <EmptyTitle className="font-heading">
-                      Nothing in this project yet
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      {GALLERY
-                        ? "Inspos added to this project will show up here."
-                        : "Use Add inspos to pick from your library, or drop or paste something new here."}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
               ) : (
                 <EmptyState
                   filtering={filtering || view.kind !== "all" || GALLERY}
@@ -565,12 +473,6 @@ export function App() {
               onClose={close}
               onStep={step}
               onUpdate={update}
-              projects={GALLERY ? undefined : projects}
-              onProjectChange={(projectId, itemId, add) =>
-                add
-                  ? changeProjectItems(projectId, [itemId])
-                  : changeProjectItems(projectId, [], [itemId])
-              }
               onDelete={(item) => {
                 step(1)
                 if (visible.length <= 1) close()
@@ -601,7 +503,7 @@ export function App() {
           <>
             <AddDialog
               open={adding}
-              where={where}
+              tag={tag}
               onOpenChange={setAdding}
               onLink={saveLink}
               onFiles={saveFiles}
@@ -611,54 +513,7 @@ export function App() {
               folder={library?.folder ?? ""}
               onOpenChange={setHelp}
             />
-            <DropOverlay where={where} onFiles={saveFiles} onLink={saveLink} />
-            {project && (
-              <AddToProjectDialog
-                open={picking}
-                project={project}
-                items={items}
-                onOpenChange={setPicking}
-                onAdd={(ids) => {
-                  changeProjectItems(project.id, ids)
-                  toast(`Added ${named(ids.length)} to “${project.name}”`)
-                }}
-              />
-            )}
-            <SelectionBar
-              count={selected.size}
-              projects={projects.filter((p) => !p.archived)}
-              current={project}
-              onAdd={(id) => {
-                const target = projects.find((p) => p.id === id)
-                changeProjectItems(id, selectedIds)
-                toast(`Added ${named(selectedIds.length)} to “${target?.name}”`)
-                clearSelection()
-              }}
-              onCreate={async (name) => {
-                const created = await createProject(name, selectedIds)
-                clearSelection()
-                if (created)
-                  toast(
-                    `Made “${created.name}” with ${named(created.items.length)}`,
-                    {
-                      action: {
-                        label: "Open",
-                        onClick: () =>
-                          showView({ kind: "project", id: created.id }),
-                      },
-                    }
-                  )
-              }}
-              onRemove={() => {
-                if (!project) return
-                changeProjectItems(project.id, [], selectedIds)
-                toast(
-                  `Removed ${named(selectedIds.length)} from “${project.name}”`
-                )
-                clearSelection()
-              }}
-              onClear={clearSelection}
-            />
+            <DropOverlay tag={tag} onFiles={saveFiles} onLink={saveLink} />
           </>
         )}
       </LayoutGroup>
