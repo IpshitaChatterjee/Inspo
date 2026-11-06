@@ -22,3 +22,24 @@ export function countTags(
       a.name.localeCompare(b.name)
   )
 }
+
+const SUGGESTIONS = 6
+
+/** Tags matching the last word typed in search: ones that start with it first, then ones that contain it. */
+export function suggestTags(
+  tags: TagCount[],
+  query: string,
+  { except }: { except?: string } = {}
+): TagCount[] {
+  const word = (query.trim().split(/\s+/).pop() ?? "")
+    .replace(/^#/, "")
+    .toLowerCase()
+  if (!word) return []
+  const candidates = tags.filter(
+    (tag) => tag.name !== except && tag.name.includes(word)
+  )
+  return [
+    ...candidates.filter((tag) => tag.name.startsWith(word)),
+    ...candidates.filter((tag) => !tag.name.startsWith(word)),
+  ].slice(0, SUGGESTIONS)
+}

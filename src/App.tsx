@@ -4,7 +4,6 @@ import {
   ImagePlusIcon,
   MoonIcon,
   PlusIcon,
-  SearchIcon,
   SunIcon,
   TriangleAlertIcon,
 } from "lucide-react"
@@ -21,7 +20,8 @@ import { CanEditContext } from "@/lib/gallery-edits"
 import { HowToSave } from "@/components/how-to-save"
 import { InspoDetail } from "@/components/inspo-detail"
 import { MasonryGrid } from "@/components/masonry-grid"
-import { MobileTags } from "@/components/mobile-tags"
+import { SearchBox } from "@/components/search-box"
+import { TagMenu } from "@/components/tag-menu"
 import { countTags, type TagCount } from "@/lib/tags"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
@@ -33,12 +33,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group"
-import { Kbd } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { useCurrentApp, type AppName } from "@/hooks/use-current-app"
 import { useLibrary } from "@/hooks/use-library"
@@ -311,7 +305,6 @@ export function App() {
               inspo: items.length,
               components: componentEntries.length,
             }}
-            tags={sidebarTags}
             total={inComponents ? componentEntries.length : items.length}
             untagged={sidebarUntagged}
             view={view}
@@ -339,27 +332,22 @@ export function App() {
                   onChange={switchApp}
                 />
               </div>
-              <InputGroup className="h-9 max-w-md rounded-full bg-muted/60 shadow-none">
-                <InputGroupAddon>
-                  <SearchIcon />
-                </InputGroupAddon>
-                <InputGroupInput
-                  ref={searchRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) =>
-                    e.key === "Escape" && (setQuery(""), e.currentTarget.blur())
-                  }
-                  placeholder={
-                    inComponents
-                      ? "Search components…"
-                      : "Search titles, tags, colours, text…"
-                  }
-                />
-                <InputGroupAddon align="inline-end">
-                  <Kbd>/</Kbd>
-                </InputGroupAddon>
-              </InputGroup>
+              <SearchBox
+                inputRef={searchRef}
+                query={query}
+                onQuery={setQuery}
+                tags={sidebarTags}
+                activeTag={tag}
+                onTag={(name) => {
+                  setView(name ? { kind: "tag", name } : { kind: "all" })
+                  window.scrollTo({ top: 0 })
+                }}
+                placeholder={
+                  inComponents
+                    ? "Search components…"
+                    : "Search titles, tags, colours, text…"
+                }
+              />
 
               {!inComponents && <TypeSwitch value={type} onChange={setType} />}
 
@@ -392,15 +380,6 @@ export function App() {
             )}
 
             <div className="flex flex-1 flex-col gap-5 px-4 pt-4 pb-16 md:px-8">
-              <MobileTags
-                tags={sidebarTags}
-                untagged={sidebarUntagged}
-                view={view}
-                onView={(next) => {
-                  setView(next)
-                  window.scrollTo({ top: 0 })
-                }}
-              />
               <div className="flex items-baseline gap-3">
                 <motion.h1
                   key={heading}
@@ -416,6 +395,14 @@ export function App() {
                     ? filteringComponents && ` of ${componentEntries.length}`
                     : filtering && ` of ${items.length}`}
                 </span>
+                {tag && !GALLERY && !inComponents && (
+                  <TagMenu
+                    key={tag}
+                    tag={tag}
+                    onRenamed={(name) => setView({ kind: "tag", name })}
+                    onRemoved={() => setView({ kind: "all" })}
+                  />
+                )}
               </div>
 
               {inComponents ? (
