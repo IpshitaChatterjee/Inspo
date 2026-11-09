@@ -516,7 +516,8 @@ function TypeSwitch({
   onChange: (value: TypeFilter) => void
 }) {
   return (
-    <div className="hidden items-center rounded-full bg-muted/60 p-0.5 lg:flex">
+    // Sunk in like the search field, so the selected option sits raised inside it.
+    <div className="hidden items-center rounded-full border border-black/12 bg-muted/70 p-0.5 shadow-[0_1px_0_rgb(255_255_255/0.8)] inset-shadow-[0_1px_2px_rgb(0_0_0/0.06)] lg:flex dark:border-white/12 dark:bg-black/20 dark:shadow-[0_1px_0_rgb(255_255_255/0.05)] dark:inset-shadow-[0_1px_2px_rgb(0_0_0/0.35)]">
       {TYPE_FILTERS.map((option) => (
         <button
           key={option.value}
@@ -533,7 +534,7 @@ function TypeSwitch({
             <motion.span
               layoutId="type-pill"
               transition={{ type: "spring", stiffness: 420, damping: 34 }}
-              className="absolute inset-0 rounded-full bg-background shadow-sm ring-1 ring-foreground/5"
+              className="absolute inset-0 rounded-full bg-background shadow-sm ring-1 ring-foreground/5 dark:bg-sidebar-accent dark:shadow-[0_1px_2px_rgb(0_0_0/0.3),0_2px_8px_rgb(0_0_0/0.3)] dark:ring-white/8"
             />
           )}
           <span className="relative">{option.label}</span>

@@ -7,7 +7,6 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { Kbd } from "@/components/ui/kbd"
 import { suggestTags, type TagCount } from "@/lib/tags"
 
 /**
@@ -66,7 +65,8 @@ export function SearchBox({
 
   return (
     <div className="relative w-full max-w-md">
-      <InputGroup className="h-9 rounded-full bg-muted/60 shadow-none">
+      {/* Sunk into the page: a shadow on the inside top, a faint light edge below. */}
+      <InputGroup className="h-9 rounded-full border-black/12 bg-muted/70 shadow-[0_1px_0_rgb(255_255_255/0.8)] inset-shadow-[0_1px_2px_rgb(0_0_0/0.06)] dark:border-white/12 dark:bg-black/20 dark:shadow-[0_1px_0_rgb(255_255_255/0.05)] dark:inset-shadow-[0_1px_2px_rgb(0_0_0/0.35)]">
         <InputGroupAddon>
           <SearchIcon />
         </InputGroupAddon>
@@ -104,9 +104,6 @@ export function SearchBox({
           aria-controls={listId}
           aria-autocomplete="list"
         />
-        <InputGroupAddon align="inline-end">
-          <Kbd>/</Kbd>
-        </InputGroupAddon>
       </InputGroup>
 
       {showSuggestions && (
