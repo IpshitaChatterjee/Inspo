@@ -39,6 +39,35 @@ import {
 import { errorMessage, hash } from "./util.ts"
 
 const app = express()
+
+// Only the app's own page may use the API. Websites open in the browser can
+// otherwise send requests here too: directly, or through a web address that
+// secretly points at this Mac. Page loads stay open, so the "Save to Inspo"
+// bookmark can still open the app from any site.
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"])
+const isLocalHost = (host: string | undefined) =>
+  !!host && LOCAL_HOSTS.has(host.replace(/:\d+$/, "").toLowerCase())
+const isLocalOrigin = (origin: string) => {
+  try {
+    return isLocalHost(new URL(origin).host)
+  } catch {
+    return false
+  }
+}
+app.use("/api", (req, res, next) => {
+  const origin = req.get("origin")
+  const site = req.get("sec-fetch-site")
+  const allowed =
+    isLocalHost(req.get("host")) &&
+    (!origin || isLocalOrigin(origin)) &&
+    (!site || site === "same-origin" || site === "none")
+  if (allowed) return next()
+  console.warn(
+    `[api] blocked ${req.method} ${req.path} from ${origin ?? req.get("host") ?? "unknown"}`
+  )
+  res.status(403).json({ error: "Only the Inspo app itself can do that." })
+})
+
 app.use(express.json({ limit: "1mb" }))
 
 type Handler = (req: Request, res: Response) => Promise<unknown>
