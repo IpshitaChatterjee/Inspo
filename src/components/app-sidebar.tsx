@@ -50,7 +50,7 @@ export function AppSidebar({
         <AppSwitcher app={app} counts={counts} onChange={onApp} />
       </div>
 
-      <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4">
+      <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pt-1 pb-4">
         <div className="flex flex-col gap-0.5">
           <NavRow
             icon={<LayersIcon />}
@@ -100,16 +100,16 @@ function NavRow({ icon, label, count, active, onClick }: NavRowProps) {
         <motion.span
           layoutId="nav-pill"
           transition={{ type: "spring", stiffness: 420, damping: 34 }}
-          className="absolute inset-0 rounded-md bg-sidebar-accent"
+          className="absolute inset-0 rounded-lg border border-black/[0.07] bg-background shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_8px_rgb(0_0_0/0.05)] dark:border-white/8 dark:bg-sidebar-accent dark:shadow-[0_1px_2px_rgb(0_0_0/0.3),0_2px_8px_rgb(0_0_0/0.3)]"
         />
       )}
       <button
         type="button"
         onClick={onClick}
         className={cn(
-          "relative flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4 [&_svg]:shrink-0",
+          "relative flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4 [&_svg]:shrink-0",
           active
-            ? "font-medium text-sidebar-accent-foreground"
+            ? "font-medium text-foreground"
             : "text-muted-foreground hover:text-foreground"
         )}
       >
