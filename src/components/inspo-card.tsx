@@ -93,7 +93,8 @@ function ImageFace({ item, onRatio }: { item: Item; onRatio: InspoCardProps["onR
         if (img.naturalWidth) onRatio(item.id, img.naturalHeight / img.naturalWidth)
         setLoaded(true)
       }}
-      className={cn(faceClass, "transition-[opacity,transform]", loaded ? "opacity-100" : "opacity-0")}
+      // The hover zoom sets `scale`, not `transform`, so it has to be listed or it snaps.
+      className={cn(faceClass, "transition-[opacity,transform,scale]", loaded ? "opacity-100" : "opacity-0")}
     />
   )
 }
